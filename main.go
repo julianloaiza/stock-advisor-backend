@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"log"
 
 	"github.com/julianloaiza/stock-advisor/config"
@@ -13,6 +12,7 @@ import (
 	"github.com/julianloaiza/stock-advisor/internal/services"
 	"github.com/labstack/echo/v4"
 	"go.uber.org/fx"
+	"gorm.io/gorm"
 )
 
 type Params struct {
@@ -20,7 +20,7 @@ type Params struct {
 
 	Lc       fx.Lifecycle
 	Config   *config.Config
-	DB       *sql.DB
+	DB       *gorm.DB
 	Echo     *echo.Echo
 	Handlers []handlers.Handler `group:"handlers"`
 }
@@ -36,9 +36,7 @@ func main() {
 		repositories.Module,
 		services.Module,
 		httpapi.Module,
-		fx.Invoke(
-			setLifeCycle,
-		),
+		fx.Invoke(setLifeCycle),
 	)
 
 	app.Run()
@@ -46,25 +44,34 @@ func main() {
 
 func setLifeCycle(p Params) {
 	p.Lc.Append(fx.Hook{
-		OnStart: func(context.Context) error {
+		OnStart: func(ctx context.Context) error {
+			// Registro de rutas
 			for _, h := range p.Handlers {
 				h.RegisterRoutes(p.Echo)
 			}
 
+			// Inicia el servidor en una gorutina separada
 			go func() {
-				p.Echo.Logger.Fatal(p.Echo.Start(p.Config.Address))
+				if err := p.Echo.Start(p.Config.Address); err != nil {
+					p.Echo.Logger.Error("❌ Error iniciando el servidor:", err)
+				}
 			}()
-
 			return nil
 		},
-
 		OnStop: func(ctx context.Context) error {
+			// Cierre del servidor
 			if err := p.Echo.Shutdown(ctx); err != nil {
-				log.Println(err)
+				log.Println("Error al detener el servidor:", err)
 			}
 
-			if err := p.DB.Close(); err != nil {
-				log.Println(err)
+			// Obtiene el objeto sql.DB y lo cierra (solo si se usó una conexión real o simulada)
+			sqlDB, err := p.DB.DB()
+			if err != nil {
+				log.Println("Error al obtener la conexión sql.DB:", err)
+			} else {
+				if err := sqlDB.Close(); err != nil {
+					log.Println("Error al cerrar la conexión a la base de datos:", err)
+				}
 			}
 
 			return nil

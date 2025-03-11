@@ -1,12 +1,11 @@
 package httpapi
 
 import (
-	"github.com/julianloaiza/stock-advisor/internal/httpapi/handlers/auth"
-	"github.com/julianloaiza/stock-advisor/internal/httpapi/handlers/profiles"
+	"github.com/julianloaiza/stock-advisor/internal/httpapi/handlers/stocks"
 	"go.uber.org/fx"
 )
 
+// Module registra los handlers de la API.
 var Module = fx.Module("httpapi", fx.Provide(
-	auth.New,
-	profiles.New,
+	stocks.New,
 ))
