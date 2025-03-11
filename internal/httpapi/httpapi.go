@@ -1,8 +1,8 @@
 package httpapi
 
 import (
-	"github.com/disturb16/go-service-struct/simple/internal/httpapi/handlers/auth"
-	"github.com/disturb16/go-service-struct/simple/internal/httpapi/handlers/profiles"
+	"github.com/julianloaiza/stock-advisor/internal/httpapi/handlers/auth"
+	"github.com/julianloaiza/stock-advisor/internal/httpapi/handlers/profiles"
 	"go.uber.org/fx"
 )
 

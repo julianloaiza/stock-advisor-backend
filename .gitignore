@@ -1,0 +1,9 @@
+# Go
+/bin/
+/pkg/
+**/*.log
+**/*.out
+**/*.test
+/.idea/
+/.vscode/
+.env

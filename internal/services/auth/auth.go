@@ -3,7 +3,7 @@ package auth
 import (
 	"context"
 
-	"github.com/disturb16/go-service-struct/simple/internal/repositories/users"
+	"github.com/julianloaiza/stock-advisor/internal/repositories/users"
 )
 
 type Service interface {

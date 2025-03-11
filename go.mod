@@ -1,4 +1,4 @@
-module github.com/disturb16/go-service-struct/simple
+module github.com/julianloaiza/stock-advisor
 
 go 1.21
 

@@ -1,8 +1,8 @@
 package repositories
 
 import (
-	"github.com/disturb16/go-service-struct/simple/internal/repositories/profiles"
-	"github.com/disturb16/go-service-struct/simple/internal/repositories/users"
+	"github.com/julianloaiza/stock-advisor/internal/repositories/profiles"
+	"github.com/julianloaiza/stock-advisor/internal/repositories/users"
 	"go.uber.org/fx"
 )
 

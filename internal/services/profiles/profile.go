@@ -3,7 +3,7 @@ package profiles
 import (
 	"context"
 
-	"github.com/disturb16/go-service-struct/simple/internal/repositories/profiles"
+	"github.com/julianloaiza/stock-advisor/internal/repositories/profiles"
 )
 
 type Service interface {

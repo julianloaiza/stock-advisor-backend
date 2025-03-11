@@ -1,8 +1,8 @@
 package profiles
 
 import (
-	"github.com/disturb16/go-service-struct/simple/internal/httpapi/handlers"
-	"github.com/disturb16/go-service-struct/simple/internal/services/profiles"
+	"github.com/julianloaiza/stock-advisor/internal/httpapi/handlers"
+	"github.com/julianloaiza/stock-advisor/internal/services/profiles"
 	"github.com/labstack/echo/v4"
 	"go.uber.org/fx"
 )

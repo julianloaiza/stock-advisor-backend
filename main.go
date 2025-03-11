@@ -5,12 +5,12 @@ import (
 	"database/sql"
 	"log"
 
-	"github.com/disturb16/go-service-struct/simple/config"
-	"github.com/disturb16/go-service-struct/simple/database"
-	"github.com/disturb16/go-service-struct/simple/internal/httpapi"
-	"github.com/disturb16/go-service-struct/simple/internal/httpapi/handlers"
-	"github.com/disturb16/go-service-struct/simple/internal/repositories"
-	"github.com/disturb16/go-service-struct/simple/internal/services"
+	"github.com/julianloaiza/stock-advisor/config"
+	"github.com/julianloaiza/stock-advisor/database"
+	"github.com/julianloaiza/stock-advisor/internal/httpapi"
+	"github.com/julianloaiza/stock-advisor/internal/httpapi/handlers"
+	"github.com/julianloaiza/stock-advisor/internal/repositories"
+	"github.com/julianloaiza/stock-advisor/internal/services"
 	"github.com/labstack/echo/v4"
 	"go.uber.org/fx"
 )
