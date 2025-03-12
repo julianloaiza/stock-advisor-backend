@@ -11,7 +11,6 @@ type Config struct {
 	DatabaseURL string
 	StockAPIURL string
 	StockAPIKey string
-	SimulateDB  bool
 }
 
 func New() *Config {
@@ -22,7 +21,6 @@ func New() *Config {
 		log.Println("⚠️ No se pudo leer .env, se utilizarán las variables de entorno")
 	}
 
-	// Definir defaults si es necesario
 	viper.SetDefault("ADDRESS", ":8080")
 	viper.SetDefault("SIMULATE_DB", false)
 
@@ -31,17 +29,6 @@ func New() *Config {
 		DatabaseURL: viper.GetString("DATABASE_URL"),
 		StockAPIURL: viper.GetString("STOCK_API_URL"),
 		StockAPIKey: viper.GetString("STOCK_API_KEY"),
-		SimulateDB:  viper.GetBool("SIMULATE_DB"),
-	}
-
-	// Si no se simula la BD, validar que DATABASE_URL esté definido
-	if !config.SimulateDB {
-		if config.DatabaseURL == "" {
-			log.Fatal("❌ DATABASE_URL no está definido")
-		}
-		if config.StockAPIURL == "" || config.StockAPIKey == "" {
-			log.Fatal("❌ Configuración de StockAPI incompleta")
-		}
 	}
 
 	return config

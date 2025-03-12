@@ -1,14 +1,18 @@
 package domain
 
-// Stock representa la información y recomendaciones de un valor.
+import "time"
+
+// Stock representa la información de un valor bursátil.
 type Stock struct {
-	Ticker     string
-	TargetFrom string
-	TargetTo   string
-	Company    string
-	Action     string
-	Brokerage  string
-	RatingFrom string
-	RatingTo   string
-	Time       string // Considera usar time.Time para manejar fechas
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	Ticker     string    `gorm:"not null" json:"ticker"`
+	Company    string    `gorm:"not null" json:"company"`
+	Brokerage  string    `gorm:"not null" json:"brokerage"`
+	Action     string    `gorm:"not null" json:"action"`
+	RatingFrom string    `gorm:"not null" json:"rating_from"`
+	RatingTo   string    `gorm:"not null" json:"rating_to"`
+	TargetFrom float64   `gorm:"not null" json:"target_from"`
+	TargetTo   float64   `gorm:"not null" json:"target_to"`
+	Currency   string    `gorm:"not null;default:'USD'" json:"currency"`
+	Time       time.Time `gorm:"not null" json:"time"`
 }
