@@ -89,48 +89,111 @@ func (r *repository) GetStocks(query string, page, size int, recommends bool) ([
 	return stocks, total, nil
 }
 
-// recommendationScore calcula una puntuación para un stock que sirve para determinar su recomendación.
-// La lógica es sumar la diferencia entre target_to y target_from y aplicar un bonus basado en el rating.
+// recommendationScore calcula un puntaje de recomendación para una acción
+// basada en varios factores, incluyendo la diferencia porcentual entre
+// el precio objetivo inicial y final, la diferencia absoluta,
+// el rating final, la transición de rating y la acción realizada.
+// Devuelve un puntaje flotante que representa la recomendación.
 func recommendationScore(s domain.Stock) float64 {
-	diff := s.TargetTo - s.TargetFrom
-	var bonus float64
+	// Diferencia porcentual
+	var percentDiff float64
+	if s.TargetFrom != 0 {
+		percentDiff = ((s.TargetTo - s.TargetFrom) / s.TargetFrom) * 100
+	} else {
+		percentDiff = s.TargetTo
+	}
 
-	// Asignamos bonus base según rating_to (convertido a minúsculas)
+	// Diferencia absoluta
+	absoluteDiff := s.TargetTo - s.TargetFrom
+
+	// Bonus por magnitud absoluta (USD)
+	var absoluteBonus float64
+	switch {
+	case absoluteDiff >= 100:
+		absoluteBonus = 10
+	case absoluteDiff >= 50:
+		absoluteBonus = 7
+	case absoluteDiff >= 20:
+		absoluteBonus = 5
+	case absoluteDiff >= 10:
+		absoluteBonus = 3
+	case absoluteDiff >= 5:
+		absoluteBonus = 2
+	default:
+		absoluteBonus = 0
+	}
+
+	// Bonus según el rating_to
+	var ratingBonus float64
 	switch strings.ToLower(s.RatingTo) {
 	case "buy":
-		bonus = 10
+		ratingBonus = 10
 	case "strong-buy":
-		bonus = 15
+		ratingBonus = 15
 	case "outperform":
-		bonus = 12
-	case "market perform":
-		bonus = 5
-	case "neutral", "hold":
-		bonus = 5
+		ratingBonus = 12
+	case "market perform", "neutral", "hold", "in-line":
+		ratingBonus = 5
 	case "sector perform", "sector weight":
-		bonus = 3
+		ratingBonus = 3
 	case "overweight":
-		bonus = 8
+		ratingBonus = 8
 	case "equal weight":
-		bonus = 2
+		ratingBonus = 2
 	case "underweight":
-		bonus = -5
+		ratingBonus = -5
 	case "sell":
-		bonus = -10
+		ratingBonus = -10
+	case "underperform", "weak-sell":
+		ratingBonus = -8
 	default:
-		bonus = 0
+		ratingBonus = 0
 	}
 
-	// Bonus adicional para cambios positivos: si rating_from es negativo ("sell" o "underweight")
-	// y rating_to es muy positivo ("buy", "strong-buy" o "outperform"), añadimos +15.
+	// Bonus adicional por transición positiva o neutral a positiva
 	ratingFrom := strings.ToLower(s.RatingFrom)
 	ratingTo := strings.ToLower(s.RatingTo)
-	if (ratingFrom == "sell" || ratingFrom == "underweight") &&
-		(ratingTo == "buy" || ratingTo == "strong-buy" || ratingTo == "outperform") {
-		bonus += 15
+	var transitionBonus float64
+	switch {
+	case (ratingFrom == "sell" || ratingFrom == "underweight" || ratingFrom == "weak-sell") &&
+		(ratingTo == "buy" || ratingTo == "strong-buy" || ratingTo == "outperform"):
+		transitionBonus = 15
+	case (ratingFrom == "neutral" || ratingFrom == "hold" || ratingFrom == "in-line") &&
+		(ratingTo == "buy" || ratingTo == "strong-buy" || ratingTo == "outperform"):
+		transitionBonus = 5
+	case (ratingFrom == "sell" || ratingFrom == "underweight" || ratingFrom == "weak-sell") &&
+		(ratingTo == "market perform" || ratingTo == "neutral" || ratingTo == "hold" || ratingTo == "in-line"):
+		transitionBonus = 3
+	case (ratingFrom == "neutral" || ratingFrom == "hold" || ratingFrom == "in-line") &&
+		(ratingTo == "market perform" || ratingTo == "neutral" || ratingTo == "hold" || ratingTo == "in-line"):
+		transitionBonus = 1
+	default:
+		transitionBonus = 0
 	}
 
-	return diff + bonus
+	// Bonus según la acción realizada
+	var actionBonus float64
+	switch strings.ToLower(s.Action) {
+	case "target raised by":
+		actionBonus = 5
+	case "upgraded by":
+		actionBonus = 7
+	case "initiated by":
+		actionBonus = 3
+	case "reiterated by":
+		actionBonus = 2
+	case "target lowered by":
+		actionBonus = -5
+	case "downgraded by":
+		actionBonus = -7
+	default:
+		actionBonus = 0
+	}
+
+	// Puntaje final equilibrado
+	score := percentDiff + absoluteBonus + ratingBonus + transitionBonus + actionBonus
+
+	return score
 }
 
 // Nota: El algoritmo de recomendación actual calcula en tiempo real un "score" para cada acción,
