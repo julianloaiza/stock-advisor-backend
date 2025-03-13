@@ -13,10 +13,8 @@ import (
 type Service interface {
 	// SyncStocks sincroniza la base de datos con la API externa.
 	SyncStocks(ctx context.Context, limit int) error
-	// GetRecommendations devuelve recomendaciones de inversión.
-	GetRecommendations(ctx context.Context) ([]Recommendation, error)
 	// GetStocks realiza una búsqueda con query y paginación.
-	GetStocks(ctx context.Context, query string, page, size int) ([]domain.Stock, int64, error)
+	GetStocks(ctx context.Context, query string, page, size int, recommends bool) ([]domain.Stock, int64, error)
 }
 
 type service struct {
@@ -39,11 +37,6 @@ func (s *service) SyncStocks(ctx context.Context, limit int) error {
 	return syncStocks(ctx, limit, s.repo, s.cfg)
 }
 
-// GetRecommendations devuelve recomendaciones (implementación simulada).
-func (s *service) GetRecommendations(ctx context.Context) ([]Recommendation, error) {
-	return []Recommendation{}, nil
-}
-
-func (s *service) GetStocks(ctx context.Context, query string, page, size int) ([]domain.Stock, int64, error) {
-	return getStocks(ctx, s.repo, query, page, size)
+func (s *service) GetStocks(ctx context.Context, query string, page, size int, recommends bool) ([]domain.Stock, int64, error) {
+	return getStocks(ctx, s.repo, query, page, size, recommends)
 }

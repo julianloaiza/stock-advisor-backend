@@ -9,7 +9,7 @@ import (
 )
 
 // getStocks es la función auxiliar que delega la búsqueda de stocks en el repositorio.
-func getStocks(ctx context.Context, repository repo.Repository, query string, page, size int) ([]domain.Stock, int64, error) {
+func getStocks(ctx context.Context, repository repo.Repository, query string, page, size int, recommends bool) ([]domain.Stock, int64, error) {
 	log.Println("Ejecutando búsqueda de stocks en el servicio (getStocks)")
-	return repository.GetStocks(query, page, size)
+	return repository.GetStocks(query, page, size, recommends)
 }

@@ -31,6 +31,5 @@ func New(service stocks.Service) Result {
 func (h *handler) RegisterRoutes(e *echo.Echo) {
 	group := e.Group("/stocks")
 	group.GET("", h.GetStocks)
-	group.GET("/recommendations", h.GetRecommendations)
 	group.POST("/sync", h.SyncStocks)
 }

@@ -13,14 +13,17 @@ import (
 //   - q: string de búsqueda (opcional)
 //   - page: número de página (por defecto 1)
 //   - size: tamaño de página (por defecto 10)
+//   - recommends: booleano para filtrar recomendaciones (opcional)
 func (h *handler) GetStocks(c echo.Context) error {
 	query := c.QueryParam("query")
 	pageStr := c.QueryParam("page")
 	sizeStr := c.QueryParam("size")
+	recommendsStr := c.QueryParam("recommends")
 
 	// Valores por defecto
 	page := 1
 	size := 10
+	recommends := false
 	var err error
 
 	if pageStr != "" {
@@ -45,8 +48,19 @@ func (h *handler) GetStocks(c echo.Context) error {
 		}
 	}
 
+	if recommendsStr != "" {
+		recommends, err = strconv.ParseBool(recommendsStr)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, response.APIResponse{
+				Code:    http.StatusBadRequest,
+				Error:   "Parámetro recommends inválido",
+				Message: "Recommends debe ser un booleano",
+			})
+		}
+	}
+
 	// Delegamos la búsqueda con paginación al servicio.
-	stocksList, total, err := h.service.GetStocks(c.Request().Context(), query, page, size)
+	stocksList, total, err := h.service.GetStocks(c.Request().Context(), query, page, size, recommends)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, response.APIResponse{
 			Code:    http.StatusInternalServerError,
