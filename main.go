@@ -8,6 +8,7 @@ import (
 	"github.com/julianloaiza/stock-advisor/database"
 	"github.com/julianloaiza/stock-advisor/internal/httpapi"
 	"github.com/julianloaiza/stock-advisor/internal/httpapi/handlers"
+	"github.com/julianloaiza/stock-advisor/internal/httpapi/middleware"
 	"github.com/julianloaiza/stock-advisor/internal/repositories"
 	"github.com/julianloaiza/stock-advisor/internal/services"
 	"github.com/labstack/echo/v4"
@@ -15,7 +16,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Params es la estructura que se usa para inyectar las dependencias.
+// Params inyecta dependencias en el ciclo de vida de la aplicación.
 type Params struct {
 	fx.In
 
@@ -26,7 +27,7 @@ type Params struct {
 	Handlers []handlers.Handler `group:"handlers"`
 }
 
-// main es la función principal que inicia la aplicación.
+// main inicia la aplicación con Uber FX.
 func main() {
 	app := fx.New(
 		fx.Provide(
@@ -44,16 +45,19 @@ func main() {
 	app.Run()
 }
 
-// setLifeCycle configura el ciclo de vida de la aplicación.
+// setLifeCycle configura el servidor y el cierre de la aplicación.
 func setLifeCycle(p Params) {
 	p.Lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			// Registro de rutas
+			// Aplicar CORS con configuración del middleware
+			middleware.ApplyCORS(p.Echo, p.Config)
+
+			// Registrar rutas de los handlers
 			for _, h := range p.Handlers {
 				h.RegisterRoutes(p.Echo)
 			}
 
-			// Inicia el servidor en una gorutina separada
+			// Iniciar el servidor en una gorutina
 			go func() {
 				if err := p.Echo.Start(p.Config.Address); err != nil {
 					p.Echo.Logger.Error("❌ Error iniciando el servidor:", err)
@@ -67,7 +71,7 @@ func setLifeCycle(p Params) {
 				log.Println("Error al detener el servidor:", err)
 			}
 
-			// Obtiene el objeto sql.DB y lo cierra (solo si se usó una conexión real o simulada)
+			// Cerrar conexión a la base de datos
 			sqlDB, err := p.DB.DB()
 			if err != nil {
 				log.Println("Error al obtener la conexión sql.DB:", err)
@@ -76,7 +80,6 @@ func setLifeCycle(p Params) {
 					log.Println("Error al cerrar la conexión a la base de datos:", err)
 				}
 			}
-
 			return nil
 		},
 	})
