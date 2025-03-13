@@ -9,14 +9,8 @@ import (
 
 // Repository define las operaciones disponibles para manejar stocks.
 type Repository interface {
-	SaveStock(stock domain.Stock) error
-	SaveStocks(stocks []domain.Stock) error
-	GetStocks() ([]domain.Stock, error)
-	GetStockByTicker(ticker string) (domain.Stock, error)
-	UpdateStock(stock domain.Stock) error
-	DeleteStock(id uint) error
-	DeleteAllStocks() error
 	ReplaceAllStocks(stocks []domain.Stock) error
+	GetStocks(query string, page, size int) ([]domain.Stock, int64, error)
 }
 
 type repository struct {
@@ -26,47 +20,6 @@ type repository struct {
 // New crea una nueva instancia del repositorio de stocks.
 func New(db *gorm.DB) Repository {
 	return &repository{db: db}
-}
-
-func (r *repository) SaveStock(stock domain.Stock) error {
-	log.Printf("Guardando stock: %s - %s", stock.Ticker, stock.Company)
-	return r.db.Create(&stock).Error
-}
-
-// SaveStocks inserta múltiples registros de stock en una única operación.
-func (r *repository) SaveStocks(stocks []domain.Stock) error {
-	log.Printf("Guardando %d stocks", len(stocks))
-	return r.db.Create(&stocks).Error
-}
-
-func (r *repository) GetStocks() ([]domain.Stock, error) {
-	var stocks []domain.Stock
-	log.Println("Obteniendo todos los stocks")
-	err := r.db.Find(&stocks).Error
-	return stocks, err
-}
-
-func (r *repository) GetStockByTicker(ticker string) (domain.Stock, error) {
-	var stock domain.Stock
-	log.Printf("Buscando stock con ticker: %s", ticker)
-	err := r.db.Where("ticker = ?", ticker).First(&stock).Error
-	return stock, err
-}
-
-func (r *repository) UpdateStock(stock domain.Stock) error {
-	log.Printf("Actualizando stock: %s", stock.Ticker)
-	return r.db.Save(&stock).Error
-}
-
-func (r *repository) DeleteStock(id uint) error {
-	log.Printf("Eliminando stock con ID: %d", id)
-	return r.db.Delete(&domain.Stock{}, id).Error
-}
-
-// DeleteAllStocks elimina todos los registros de la tabla Stock.
-func (r *repository) DeleteAllStocks() error {
-	log.Println("Eliminando todos los stocks existentes")
-	return r.db.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&domain.Stock{}).Error
 }
 
 // ReplaceAllStocks reemplaza la data existente en la tabla Stock por la nueva data,
@@ -79,4 +32,27 @@ func (r *repository) ReplaceAllStocks(stocks []domain.Stock) error {
 		}
 		return tx.Create(&stocks).Error
 	})
+}
+
+// GetStocks busca stocks cuyos atributos contengan el string query (case-insensitive)
+// en los campos ticker, company, brokerage, action, rating_from y rating_to.
+// Aplica paginación a la consulta, devolviendo además el total de registros encontrados.
+func (r *repository) GetStocks(query string, page, size int) ([]domain.Stock, int64, error) {
+	var stocks []domain.Stock
+	var total int64
+	offset := (page - 1) * size
+	likeQuery := "%" + query + "%"
+	dbQuery := r.db.Model(&domain.Stock{}).
+		Where("ticker ILIKE ? OR company ILIKE ? OR brokerage ILIKE ? OR action ILIKE ? OR rating_from ILIKE ? OR rating_to ILIKE ?",
+			likeQuery, likeQuery, likeQuery, likeQuery, likeQuery, likeQuery)
+
+	// Contar el total de registros
+	if err := dbQuery.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	// Aplicar paginación y obtener los registros
+	if err := dbQuery.Offset(offset).Limit(size).Find(&stocks).Error; err != nil {
+		return nil, 0, err
+	}
+	return stocks, total, nil
 }

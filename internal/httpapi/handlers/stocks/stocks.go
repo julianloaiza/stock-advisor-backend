@@ -27,7 +27,7 @@ func New(service stocks.Service) Result {
 	}
 }
 
-// Asegúrate de implementar RegisterRoutes.
+// RegisterRoutes registra las rutas de stocks.
 func (h *handler) RegisterRoutes(e *echo.Echo) {
 	group := e.Group("/stocks")
 	group.GET("", h.GetStocks)

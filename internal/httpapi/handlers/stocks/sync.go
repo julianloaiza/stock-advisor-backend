@@ -9,6 +9,8 @@ import (
 )
 
 // SyncStocks sincroniza la base de datos con la API mediante el servicio.
+// Parámetro de query:
+//   - limit: cantidad de iteraciones (por defecto 1)
 func (h *handler) SyncStocks(c echo.Context) error {
 	// Leer el parámetro "limit", por defecto 1
 	limitStr := c.QueryParam("limit")
@@ -17,6 +19,7 @@ func (h *handler) SyncStocks(c echo.Context) error {
 		parsed, err := strconv.Atoi(limitStr)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, response.APIResponse{
+				Code:    http.StatusBadRequest,
 				Error:   "Parámetro limit inválido",
 				Message: "El parámetro limit debe ser un número entero",
 			})
@@ -28,12 +31,14 @@ func (h *handler) SyncStocks(c echo.Context) error {
 	err := h.service.SyncStocks(c.Request().Context(), limit)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, response.APIResponse{
+			Code:    http.StatusInternalServerError,
 			Error:   "Error sincronizando stocks",
 			Message: err.Error(),
 		})
 	}
 
 	return c.JSON(http.StatusOK, response.APIResponse{
+		Code:    http.StatusOK,
 		Data:    nil,
 		Message: "Sincronización completada exitosamente",
 	})

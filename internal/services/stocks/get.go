@@ -3,18 +3,13 @@ package stocks
 import (
 	"context"
 	"log"
+
+	"github.com/julianloaiza/stock-advisor/internal/domain"
+	repo "github.com/julianloaiza/stock-advisor/internal/repositories/stocks"
 )
 
-// Stock es un modelo simplificado para representar una acción.
-type Stock struct {
-	Ticker string
-	Price  float64
-	// Otros campos relevantes...
-}
-
-// getStocks implementa la lógica para obtener stocks desde la base de datos.
-func getStocks(ctx context.Context) ([]Stock, error) {
-	log.Println("📊 Lógica para obtener stocks desde la BD")
-	// Lógica simulada: devuelve una lista vacía.
-	return []Stock{}, nil
+// getStocks es la función auxiliar que delega la búsqueda de stocks en el repositorio.
+func getStocks(ctx context.Context, repository repo.Repository, query string, page, size int) ([]domain.Stock, int64, error) {
+	log.Println("Ejecutando búsqueda de stocks en el servicio (getStocks)")
+	return repository.GetStocks(query, page, size)
 }
