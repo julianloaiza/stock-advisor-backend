@@ -4,26 +4,47 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/julianloaiza/stock-advisor/config"
+	"github.com/julianloaiza/stock-advisor/internal/domain"
+	repo "github.com/julianloaiza/stock-advisor/internal/repositories/stocks"
 )
 
-// syncStocks implementa la lógica para sincronizar la base de datos con la API.
-func syncStocks(ctx context.Context) error {
-	log.Println("🔄 Iniciando sincronización con la API de Truora")
+// syncStocks es la función auxiliar que contiene la lógica para sincronizar
+// la base de datos con la API externa. Acumula en memoria todos los registros
+// obtenidos y, al finalizar, reemplaza la data antigua en una única operación.
+//
+// Se valida que el parámetro "limit" no exceda el máximo permitido (cfg.SyncMaxIterations)
+// y se preasigna el slice con capacidad = limit * 10.
+func syncStocks(ctx context.Context, limit int, repository repo.Repository, cfg *config.Config) error {
+	// Validar que "limit" no exceda el máximo permitido.
+	maxIterations := cfg.SyncMaxIterations // Por ejemplo, 100 (definido en .env como SYNC_MAX_ITERATIONS)
+	if limit > maxIterations {
+		log.Printf("El parámetro limit (%d) excede el máximo permitido (%d). Se utilizarán %d iteraciones.",
+			limit, maxIterations, maxIterations)
+		limit = maxIterations
+	}
 
+	// Preasignar el slice con capacidad = limit * 10.
+	allStocks := make([]domain.Stock, 0, limit*10)
+
+	log.Println("🔄 Iniciando sincronización con la API")
 	client := &http.Client{}
-	baseURL := "https://8j5baasof2.execute-api.us-west-2.amazonaws.com/production/swechallenge/list"
-	authToken := "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdHRlbXB0cyI6MSwiZW1haWwiOiJsb2FpemFqdWxpYW4xOTk5QGdtYWlsLmNvbSIsImV4cCI6MTc0MTQ1Mjc0OCwiaWQiOiIwIiwicGFzc3dvcmQiOiInIE9SICcxJz0nMSJ9.adVaiW9LmcuxjPC4kclyMB7bjUZVKbJxmVj1qLobtLI"
+	baseURL := cfg.StockAPIURL
+	authToken := "Bearer " + cfg.StockAPIKey
 
 	var nextPage string
-	// Mapa para almacenar los tokens ya vistos y detectar ciclos.
 	seenTokens := make(map[string]bool)
 
-	// Iterar hasta 100 veces.
-	for i := 1; i <= 10000; i++ {
-		// Construir la URL con el query param si ya tenemos un next_page
+	// Iterar hasta el límite definido.
+	for i := 1; i <= limit; i++ {
+		// Construir la URL con el query param "next_page" si corresponde.
 		url := baseURL
 		if nextPage != "" {
 			url = fmt.Sprintf("%s?next_page=%s", baseURL, nextPage)
@@ -38,15 +59,23 @@ func syncStocks(ctx context.Context) error {
 		req.Header.Set("Authorization", authToken)
 		req.Header.Set("Content-Type", "application/json")
 
-		// Realizar la request.
+		// Ejecutar la request.
 		resp, err := client.Do(req)
 		if err != nil {
 			log.Printf("Iteración %d: error realizando la request: %v", i, err)
 			return err
 		}
 
-		// Leer y decodificar el body de la respuesta.
-		body, err := ioutil.ReadAll(resp.Body)
+		// Verificar el status code.
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			errMsg := fmt.Sprintf("Iteración %d: status code inesperado: %d", i, resp.StatusCode)
+			log.Println(errMsg)
+			return fmt.Errorf(errMsg)
+		}
+
+		// Leer y cerrar el body.
+		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
 			log.Printf("Iteración %d: error leyendo la respuesta: %v", i, err)
@@ -63,27 +92,85 @@ func syncStocks(ctx context.Context) error {
 			return err
 		}
 
-		// Imprimir el valor de next_page de esta iteración.
 		log.Printf("Iteración %d: next_page value = %s", i, result.NextPage)
 
-		// Validar: si next_page está vacío, finalizamos.
+		// Convertir cada item a domain.Stock y acumular.
+		for _, item := range result.Items {
+			stock, err := parseStock(item)
+			if err != nil {
+				log.Printf("Iteración %d: error parseando stock: %v", i, err)
+				return err
+			}
+			allStocks = append(allStocks, stock)
+		}
+
+		// Si no se recibe next_page o se detecta ciclo, finalizar.
 		if result.NextPage == "" {
 			log.Println("No se recibió next_page. Finalizando sincronización.")
 			break
 		}
-
-		// Validar si ya se vio este token (detecta ciclo).
 		if seenTokens[result.NextPage] {
 			log.Printf("Detectado ciclo en iteración %d: next_page '%s' ya fue visto. Finalizando sincronización.", i, result.NextPage)
 			break
 		}
-
-		// Almacenar el token para evitar ciclos.
 		seenTokens[result.NextPage] = true
-		// Actualizar nextPage para la siguiente iteración.
 		nextPage = result.NextPage
 	}
 
-	log.Println("Sincronización finalizada.")
+	// Reemplazar toda la data en la base de datos en una única transacción.
+	if err := repository.ReplaceAllStocks(allStocks); err != nil {
+		log.Printf("Error reemplazando stocks: %v", err)
+		return err
+	}
+
+	log.Println("Sincronización completada exitosamente.")
 	return nil
+}
+
+// parseStock convierte un mapa (map[string]interface{}) en un objeto domain.Stock.
+// Realiza las conversiones necesarias para los campos numéricos y de fecha.
+func parseStock(item map[string]interface{}) (domain.Stock, error) {
+	var s domain.Stock
+
+	ticker, _ := item["ticker"].(string)
+	company, _ := item["company"].(string)
+	brokerage, _ := item["brokerage"].(string)
+	action, _ := item["action"].(string)
+	ratingFrom, _ := item["rating_from"].(string)
+	ratingTo, _ := item["rating_to"].(string)
+	timeStr, _ := item["time"].(string)
+	targetFromStr, _ := item["target_from"].(string)
+	targetToStr, _ := item["target_to"].(string)
+
+	// Eliminar el símbolo "$" y las comas de los valores.
+	targetFromStr = strings.ReplaceAll(strings.TrimPrefix(targetFromStr, "$"), ",", "")
+	targetToStr = strings.ReplaceAll(strings.TrimPrefix(targetToStr, "$"), ",", "")
+
+	targetFrom, err := strconv.ParseFloat(targetFromStr, 64)
+	if err != nil {
+		return s, fmt.Errorf("error converting target_from: %v", err)
+	}
+	targetTo, err := strconv.ParseFloat(targetToStr, 64)
+	if err != nil {
+		return s, fmt.Errorf("error converting target_to: %v", err)
+	}
+
+	parsedTime, err := time.Parse(time.RFC3339Nano, timeStr)
+	if err != nil {
+		return s, fmt.Errorf("error parsing time: %v", err)
+	}
+
+	s = domain.Stock{
+		Ticker:     ticker,
+		Company:    company,
+		Brokerage:  brokerage,
+		Action:     action,
+		RatingFrom: ratingFrom,
+		RatingTo:   ratingTo,
+		TargetFrom: targetFrom,
+		TargetTo:   targetTo,
+		Time:       parsedTime,
+		Currency:   "USD",
+	}
+	return s, nil
 }

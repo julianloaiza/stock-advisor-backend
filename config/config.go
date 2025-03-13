@@ -7,10 +7,12 @@ import (
 )
 
 type Config struct {
-	Address     string
-	DatabaseURL string
-	StockAPIURL string
-	StockAPIKey string
+	Address           string
+	DatabaseURL       string
+	StockAPIURL       string
+	StockAPIKey       string
+	SyncMaxIterations int
+	SyncTimeout       int
 }
 
 func New() *Config {
@@ -22,13 +24,15 @@ func New() *Config {
 	}
 
 	viper.SetDefault("ADDRESS", ":8080")
-	viper.SetDefault("SIMULATE_DB", false)
+	viper.SetDefault("SYNC_MAX_ITERATIONS", 100)
 
 	config := &Config{
-		Address:     viper.GetString("ADDRESS"),
-		DatabaseURL: viper.GetString("DATABASE_URL"),
-		StockAPIURL: viper.GetString("STOCK_API_URL"),
-		StockAPIKey: viper.GetString("STOCK_API_KEY"),
+		Address:           viper.GetString("ADDRESS"),
+		DatabaseURL:       viper.GetString("DATABASE_URL"),
+		StockAPIURL:       viper.GetString("STOCK_API_URL"),
+		StockAPIKey:       viper.GetString("STOCK_API_KEY"),
+		SyncMaxIterations: viper.GetInt("SYNC_MAX_ITERATIONS"),
+		SyncTimeout:       viper.GetInt("SYNC_TIMEOUT"),
 	}
 
 	return config

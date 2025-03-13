@@ -10,10 +10,13 @@ import (
 // Repository define las operaciones disponibles para manejar stocks.
 type Repository interface {
 	SaveStock(stock domain.Stock) error
+	SaveStocks(stocks []domain.Stock) error
 	GetStocks() ([]domain.Stock, error)
 	GetStockByTicker(ticker string) (domain.Stock, error)
 	UpdateStock(stock domain.Stock) error
 	DeleteStock(id uint) error
+	DeleteAllStocks() error
+	ReplaceAllStocks(stocks []domain.Stock) error
 }
 
 type repository struct {
@@ -28,6 +31,12 @@ func New(db *gorm.DB) Repository {
 func (r *repository) SaveStock(stock domain.Stock) error {
 	log.Printf("Guardando stock: %s - %s", stock.Ticker, stock.Company)
 	return r.db.Create(&stock).Error
+}
+
+// SaveStocks inserta múltiples registros de stock en una única operación.
+func (r *repository) SaveStocks(stocks []domain.Stock) error {
+	log.Printf("Guardando %d stocks", len(stocks))
+	return r.db.Create(&stocks).Error
 }
 
 func (r *repository) GetStocks() ([]domain.Stock, error) {
@@ -52,4 +61,22 @@ func (r *repository) UpdateStock(stock domain.Stock) error {
 func (r *repository) DeleteStock(id uint) error {
 	log.Printf("Eliminando stock con ID: %d", id)
 	return r.db.Delete(&domain.Stock{}, id).Error
+}
+
+// DeleteAllStocks elimina todos los registros de la tabla Stock.
+func (r *repository) DeleteAllStocks() error {
+	log.Println("Eliminando todos los stocks existentes")
+	return r.db.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&domain.Stock{}).Error
+}
+
+// ReplaceAllStocks reemplaza la data existente en la tabla Stock por la nueva data,
+// utilizando una transacción para asegurar atomicidad.
+func (r *repository) ReplaceAllStocks(stocks []domain.Stock) error {
+	log.Println("Reemplazando todos los stocks existentes")
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&domain.Stock{}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&stocks).Error
+	})
 }
