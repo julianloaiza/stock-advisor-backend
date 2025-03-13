@@ -4,7 +4,7 @@ import "time"
 
 // Stock representa la información de un valor bursátil.
 type Stock struct {
-	ID         uint      `gorm:"primaryKey" json:"id"`
+	ID         int64     `gorm:"primaryKey" json:"id"`
 	Ticker     string    `gorm:"not null" json:"ticker"`
 	Company    string    `gorm:"not null" json:"company"`
 	Brokerage  string    `gorm:"not null" json:"brokerage"`
