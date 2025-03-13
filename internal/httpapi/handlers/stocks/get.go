@@ -14,16 +14,21 @@ import (
 //   - page: número de página (por defecto 1)
 //   - size: tamaño de página (por defecto 10)
 //   - recommends: booleano para filtrar recomendaciones (opcional)
+//   - min_target_to: valor mínimo del target (opcional)
+//   - max_target_to: valor máximo del target (opcional)
 func (h *handler) GetStocks(c echo.Context) error {
 	query := c.QueryParam("query")
 	pageStr := c.QueryParam("page")
 	sizeStr := c.QueryParam("size")
 	recommendsStr := c.QueryParam("recommends")
+	minTargetToStr := c.QueryParam("min_target_to")
+	maxTargetToStr := c.QueryParam("max_target_to")
 
 	// Valores por defecto
 	page := 1
 	size := 10
 	recommends := false
+	var minTargetTo, maxTargetTo float64
 	var err error
 
 	if pageStr != "" {
@@ -59,8 +64,30 @@ func (h *handler) GetStocks(c echo.Context) error {
 		}
 	}
 
+	if minTargetToStr != "" {
+		minTargetTo, err = strconv.ParseFloat(minTargetToStr, 64)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, response.APIResponse{
+				Code:    http.StatusBadRequest,
+				Error:   "Parámetro min_target_to inválido",
+				Message: "MinTargetTo debe ser un número",
+			})
+		}
+	}
+
+	if maxTargetToStr != "" {
+		maxTargetTo, err = strconv.ParseFloat(maxTargetToStr, 64)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, response.APIResponse{
+				Code:    http.StatusBadRequest,
+				Error:   "Parámetro max_target_to inválido",
+				Message: "MaxTargetTo debe ser un número",
+			})
+		}
+	}
+
 	// Delegamos la búsqueda con paginación al servicio.
-	stocksList, total, err := h.service.GetStocks(c.Request().Context(), query, page, size, recommends)
+	stocksList, total, err := h.service.GetStocks(query, page, size, recommends, minTargetTo, maxTargetTo)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, response.APIResponse{
 			Code:    http.StatusInternalServerError,

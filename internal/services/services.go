@@ -5,6 +5,7 @@ import (
 	"go.uber.org/fx"
 )
 
+// Module registra los servicios.
 var Module = fx.Module("services", fx.Provide(
 	stocks.New,
 ))

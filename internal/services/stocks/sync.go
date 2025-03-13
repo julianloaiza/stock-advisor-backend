@@ -11,90 +11,49 @@ import (
 	"strings"
 	"time"
 
-	"github.com/julianloaiza/stock-advisor/config"
 	"github.com/julianloaiza/stock-advisor/internal/domain"
-	repo "github.com/julianloaiza/stock-advisor/internal/repositories/stocks"
 )
 
-// syncStocks es la función auxiliar que contiene la lógica para sincronizar
-// la base de datos con la API externa. Acumula en memoria todos los registros
-// obtenidos y, al finalizar, reemplaza la data antigua en una única operación.
-//
-// Se valida que el parámetro "limit" no exceda el máximo permitido (cfg.SyncMaxIterations)
-// y se preasigna el slice con capacidad = limit * 10.
-func syncStocks(ctx context.Context, limit int, repository repo.Repository, cfg *config.Config) error {
-	// Validar que "limit" no exceda el máximo permitido.
-	maxIterations := cfg.SyncMaxIterations // Por ejemplo, 100 (definido en .env como SYNC_MAX_ITERATIONS)
-	if limit > maxIterations {
-		log.Printf("El parámetro limit (%d) excede el máximo permitido (%d). Se utilizarán %d iteraciones.",
-			limit, maxIterations, maxIterations)
-		limit = maxIterations
-	}
+// SyncStocks utiliza la función auxiliar (definida en sync.go) para sincronizar la base de datos.
+func (s *service) SyncStocks(ctx context.Context, limit int) error {
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(s.cfg.SyncTimeout)*time.Second)
+	defer cancel()
+	return s.syncStocks(ctx, limit)
+}
 
-	// Preasignar el slice con capacidad = limit * 10.
+// syncStocks es la función auxiliar que contiene la lógica para sincronizar
+// la base de datos con la API externa.
+func (s *service) syncStocks(ctx context.Context, limit int) error {
+	limit = s.validateLimit(limit)
 	allStocks := make([]domain.Stock, 0, limit*10)
 
 	log.Println("🔄 Iniciando sincronización con la API")
 	client := &http.Client{}
-	baseURL := cfg.StockAPIURL
-	authToken := "Bearer " + cfg.StockAPIKey
+	baseURL := s.cfg.StockAPIURL
+	authToken := "Bearer " + s.cfg.StockAPIKey
 
 	var nextPage string
 	seenTokens := make(map[string]bool)
 
-	// Iterar hasta el límite definido.
 	for i := 1; i <= limit; i++ {
-		// Construir la URL con el query param "next_page" si corresponde.
-		url := baseURL
-		if nextPage != "" {
-			url = fmt.Sprintf("%s?next_page=%s", baseURL, nextPage)
-		}
-
-		// Crear la request HTTP con contexto.
-		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		url := s.constructURL(baseURL, nextPage)
+		resp, err := s.makeRequest(ctx, client, url, authToken)
 		if err != nil {
-			log.Printf("Iteración %d: error creando la request: %v", i, err)
-			return err
-		}
-		req.Header.Set("Authorization", authToken)
-		req.Header.Set("Content-Type", "application/json")
-
-		// Ejecutar la request.
-		resp, err := client.Do(req)
-		if err != nil {
-			log.Printf("Iteración %d: error realizando la request: %v", i, err)
 			return err
 		}
 
-		// Verificar el status code.
-		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
-			errMsg := fmt.Sprintf("Iteración %d: status code inesperado: %d", i, resp.StatusCode)
-			log.Println(errMsg)
-			return fmt.Errorf(errMsg)
-		}
-
-		// Leer y cerrar el body.
-		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		body, err := s.readResponseBody(resp)
 		if err != nil {
-			log.Printf("Iteración %d: error leyendo la respuesta: %v", i, err)
 			return err
 		}
 
-		// Estructura para decodificar la respuesta.
-		var result struct {
-			Items    []map[string]interface{} `json:"items"`
-			NextPage string                   `json:"next_page"`
-		}
-		if err := json.Unmarshal(body, &result); err != nil {
-			log.Printf("Iteración %d: error decodificando JSON: %v", i, err)
+		result, err := s.parseResponseBody(body)
+		if err != nil {
 			return err
 		}
 
 		log.Printf("Iteración %d: next_page value = %s", i, result.NextPage)
 
-		// Convertir cada item a domain.Stock y acumular.
 		for _, item := range result.Items {
 			stock, err := parseStock(item)
 			if err != nil {
@@ -104,31 +63,112 @@ func syncStocks(ctx context.Context, limit int, repository repo.Repository, cfg 
 			allStocks = append(allStocks, stock)
 		}
 
-		// Si no se recibe next_page o se detecta ciclo, finalizar.
-		if result.NextPage == "" {
-			log.Println("No se recibió next_page. Finalizando sincronización.")
-			break
-		}
-		if seenTokens[result.NextPage] {
-			log.Printf("Detectado ciclo en iteración %d: next_page '%s' ya fue visto. Finalizando sincronización.", i, result.NextPage)
+		if s.shouldTerminateSync(result.NextPage, seenTokens) {
 			break
 		}
 		seenTokens[result.NextPage] = true
 		nextPage = result.NextPage
 	}
 
-	// Reemplazar toda la data en la base de datos en una única transacción.
-	if err := repository.ReplaceAllStocks(allStocks); err != nil {
+	return s.replaceAllStocks(allStocks)
+}
+
+// validateLimit valida el parámetro limit y lo ajusta si es necesario.
+func (s *service) validateLimit(limit int) int {
+	maxIterations := s.cfg.SyncMaxIterations
+	if limit > maxIterations {
+		log.Printf("El parámetro limit (%d) excede el máximo permitido (%d). Se utilizarán %d iteraciones.",
+			limit, maxIterations, maxIterations)
+		limit = maxIterations
+	}
+	return limit
+}
+
+// constructURL construye la URL de la API con el parámetro next_page.
+func (s *service) constructURL(baseURL, nextPage string) string {
+	if nextPage != "" {
+		return fmt.Sprintf("%s?next_page=%s", baseURL, nextPage)
+	}
+	return baseURL
+}
+
+// makeRequest realiza una solicitud HTTP GET con el cliente proporcionado.
+func (s *service) makeRequest(ctx context.Context, client *http.Client, url, authToken string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		log.Printf("Error creando la request: %v", err)
+		return nil, err
+	}
+	req.Header.Set("Authorization", authToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("Error realizando la request: %v", err)
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		errMsg := fmt.Sprintf("Status code inesperado: %d", resp.StatusCode)
+		log.Println(errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+
+	return resp, nil
+}
+
+// readResponseBody lee el cuerpo de la respuesta HTTP.
+func (s *service) readResponseBody(resp *http.Response) ([]byte, error) {
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		log.Printf("Error leyendo la respuesta: %v", err)
+		return nil, err
+	}
+	return body, nil
+}
+
+// parseResponseBody decodifica el cuerpo de la respuesta JSON.
+func (s *service) parseResponseBody(body []byte) (*struct {
+	Items    []map[string]interface{} `json:"items"`
+	NextPage string                   `json:"next_page"`
+}, error) {
+	var result struct {
+		Items    []map[string]interface{} `json:"items"`
+		NextPage string                   `json:"next_page"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		log.Printf("Error decodificando JSON: %v", err)
+		return nil, err
+	}
+	return &result, nil
+}
+
+// shouldTerminateSync determina si la sincronización debe terminar.
+func (s *service) shouldTerminateSync(nextPage string, seenTokens map[string]bool) bool {
+	if nextPage == "" {
+		log.Println("No se recibió next_page. Finalizando sincronización.")
+		return true
+	}
+	if seenTokens[nextPage] {
+		log.Printf("Detectado ciclo: next_page '%s' ya fue visto. Finalizando sincronización.", nextPage)
+		return true
+	}
+	return false
+}
+
+// replaceAllStocks reemplaza todos los stocks en la base de datos.
+func (s *service) replaceAllStocks(allStocks []domain.Stock) error {
+	if err := s.repo.ReplaceAllStocks(allStocks); err != nil {
 		log.Printf("Error reemplazando stocks: %v", err)
 		return err
 	}
-
 	log.Println("Sincronización completada exitosamente.")
 	return nil
 }
 
 // parseStock convierte un mapa (map[string]interface{}) en un objeto domain.Stock.
-// Realiza las conversiones necesarias para los campos numéricos y de fecha.
 func parseStock(item map[string]interface{}) (domain.Stock, error) {
 	var s domain.Stock
 
@@ -142,7 +182,6 @@ func parseStock(item map[string]interface{}) (domain.Stock, error) {
 	targetFromStr, _ := item["target_from"].(string)
 	targetToStr, _ := item["target_to"].(string)
 
-	// Eliminar el símbolo "$" y las comas de los valores.
 	targetFromStr = strings.ReplaceAll(strings.TrimPrefix(targetFromStr, "$"), ",", "")
 	targetToStr = strings.ReplaceAll(strings.TrimPrefix(targetToStr, "$"), ",", "")
 

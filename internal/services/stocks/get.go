@@ -1,15 +1,31 @@
 package stocks
 
 import (
-	"context"
 	"log"
+	"sort"
 
 	"github.com/julianloaiza/stock-advisor/internal/domain"
-	repo "github.com/julianloaiza/stock-advisor/internal/repositories/stocks"
 )
 
-// getStocks es la función auxiliar que delega la búsqueda de stocks en el repositorio.
-func getStocks(ctx context.Context, repository repo.Repository, query string, page, size int, recommends bool) ([]domain.Stock, int64, error) {
-	log.Println("Ejecutando búsqueda de stocks en el servicio (getStocks)")
-	return repository.GetStocks(query, page, size, recommends)
+// GetStocks maneja la búsqueda, paginación y recomendaciones.
+func (s *service) GetStocks(query string, page, size int, recommends bool, minTargetTo, maxTargetTo float64) ([]domain.Stock, int64, error) {
+	log.Println("Ejecutando búsqueda de stocks en el servicio")
+
+	// Obtener stocks paginados desde la base de datos
+	allStocks, total, err := s.repo.GetStocks(query, minTargetTo, maxTargetTo, page, size)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Si no se solicitan recomendaciones, devolvemos los resultados tal cual
+	if !recommends {
+		return allStocks, total, nil
+	}
+
+	// Si se solicita recomendación, reordenamos los resultados
+	sort.Slice(allStocks, func(i, j int) bool {
+		return recommendationScore(allStocks[i]) > recommendationScore(allStocks[j])
+	})
+
+	return allStocks, total, nil
 }

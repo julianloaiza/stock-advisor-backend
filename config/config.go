@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Config contiene la configuración de la aplicación.
 type Config struct {
 	Address           string
 	DatabaseURL       string
@@ -15,6 +16,7 @@ type Config struct {
 	SyncTimeout       int
 }
 
+// New crea una nueva instancia de Config.
 func New() *Config {
 	viper.SetConfigFile(".env")
 	viper.AutomaticEnv()

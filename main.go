@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// Params es la estructura que se usa para inyectar las dependencias.
 type Params struct {
 	fx.In
 
@@ -25,6 +26,7 @@ type Params struct {
 	Handlers []handlers.Handler `group:"handlers"`
 }
 
+// main es la función principal que inicia la aplicación.
 func main() {
 	app := fx.New(
 		fx.Provide(
@@ -42,6 +44,7 @@ func main() {
 	app.Run()
 }
 
+// setLifeCycle configura el ciclo de vida de la aplicación.
 func setLifeCycle(p Params) {
 	p.Lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
