@@ -13,7 +13,7 @@ type handler struct {
 	service stocks.Service
 }
 
-// Result es el tipo que usaremos para "publicar" el handler en el grupo de handlers.
+// Result es el tipo para publicar el handler en el grupo de handlers.
 type Result struct {
 	fx.Out
 

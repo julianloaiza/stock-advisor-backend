@@ -8,52 +8,66 @@ import (
 
 // recommendationScore calcula un puntaje de recomendación para una acción.
 func recommendationScore(s domain.Stock) float64 {
-	var percentDiff float64
-	if s.TargetFrom != 0 {
-		percentDiff = ((s.TargetTo - s.TargetFrom) / s.TargetFrom) * 100
-	} else {
-		percentDiff = s.TargetTo
-	}
+	// Calcular la diferencia porcentual entre target_to y target_from
+	percentDiff := calculatePercentDiff(s.TargetFrom, s.TargetTo)
 
-	absoluteDiff := s.TargetTo - s.TargetFrom
+	// Calcular bonificaciones adicionales
+	absoluteBonus := calculateAbsoluteBonus(s.TargetTo - s.TargetFrom)
+	ratingBonus := calculateRatingBonus(s.RatingTo)
+	actionBonus := calculateActionBonus(s.Action)
 
-	var absoluteBonus float64
-	switch {
-	case absoluteDiff >= 100:
-		absoluteBonus = 10
-	case absoluteDiff >= 50:
-		absoluteBonus = 7
-	case absoluteDiff >= 20:
-		absoluteBonus = 5
-	case absoluteDiff >= 10:
-		absoluteBonus = 3
-	case absoluteDiff >= 5:
-		absoluteBonus = 2
-	default:
-		absoluteBonus = 0
-	}
-
-	var ratingBonus float64
-	switch strings.ToLower(s.RatingTo) {
-	case "buy":
-		ratingBonus = 10
-	case "strong-buy":
-		ratingBonus = 15
-	case "outperform":
-		ratingBonus = 12
-	default:
-		ratingBonus = 0
-	}
-
-	var actionBonus float64
-	switch strings.ToLower(s.Action) {
-	case "target raised by":
-		actionBonus = 5
-	case "upgraded by":
-		actionBonus = 7
-	default:
-		actionBonus = 0
-	}
-
+	// Retornar la puntuación total
 	return percentDiff + absoluteBonus + ratingBonus + actionBonus
+}
+
+// calculatePercentDiff calcula la diferencia porcentual
+func calculatePercentDiff(from, to float64) float64 {
+	if from != 0 {
+		return ((to - from) / from) * 100
+	}
+	return to // Si from es 0, usamos to como diferencia
+}
+
+// calculateAbsoluteBonus calcula la bonificación basada en la diferencia absoluta
+func calculateAbsoluteBonus(diff float64) float64 {
+	switch {
+	case diff >= 100:
+		return 10
+	case diff >= 50:
+		return 7
+	case diff >= 20:
+		return 5
+	case diff >= 10:
+		return 3
+	case diff >= 5:
+		return 2
+	default:
+		return 0
+	}
+}
+
+// calculateRatingBonus calcula la bonificación basada en la calificación
+func calculateRatingBonus(rating string) float64 {
+	switch strings.ToLower(rating) {
+	case "buy":
+		return 10
+	case "strong-buy":
+		return 15
+	case "outperform":
+		return 12
+	default:
+		return 0
+	}
+}
+
+// calculateActionBonus calcula la bonificación basada en la acción
+func calculateActionBonus(action string) float64 {
+	switch strings.ToLower(action) {
+	case "target raised by":
+		return 5
+	case "upgraded by":
+		return 7
+	default:
+		return 0
+	}
 }

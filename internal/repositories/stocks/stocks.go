@@ -9,10 +9,12 @@ import (
 type Repository interface {
 	// ReplaceAllStocks reemplaza todos los stocks en la base de datos.
 	ReplaceAllStocks(stocks []domain.Stock) error
+
 	// GetStocks obtiene los stocks filtrados, aplicando paginación en la base de datos.
-	GetStocks(query string, minTargetTo, maxTargetTo float64, page, size int) ([]domain.Stock, int64, error)
+	GetStocks(query string, minTargetTo, maxTargetTo float64, currency string, page, size int) ([]domain.Stock, int64, error)
 }
 
+// repository implementa la interfaz Repository.
 type repository struct {
 	db *gorm.DB
 }

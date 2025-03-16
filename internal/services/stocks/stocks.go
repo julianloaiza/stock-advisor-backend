@@ -12,8 +12,9 @@ import (
 type Service interface {
 	// SyncStocks sincroniza la base de datos con la API externa.
 	SyncStocks(ctx context.Context, limit int) error
+
 	// GetStocks realiza una búsqueda con query y paginación.
-	GetStocks(query string, page, size int, recommends bool, minTargetTo, maxTargetTo float64) ([]domain.Stock, int64, error)
+	GetStocks(query string, page, size int, recommends bool, minTargetTo, maxTargetTo float64, currency string) ([]domain.Stock, int64, error)
 }
 
 // service implementa la interfaz Service.

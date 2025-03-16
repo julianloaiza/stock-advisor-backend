@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/julianloaiza/stock-advisor/config"
 	"github.com/julianloaiza/stock-advisor/database"
@@ -59,28 +60,46 @@ func setLifeCycle(p Params) {
 
 			// Iniciar el servidor en una gorutina
 			go func() {
+				log.Printf("🚀 Iniciando servidor en %s", p.Config.Address)
 				if err := p.Echo.Start(p.Config.Address); err != nil {
-					p.Echo.Logger.Error("❌ Error iniciando el servidor:", err)
+					log.Printf("❌ Error iniciando el servidor: %v", err)
 				}
 			}()
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
+			// Añadimos un timeout para el shutdown
+			shutdownCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+
 			// Cierre del servidor
-			if err := p.Echo.Shutdown(ctx); err != nil {
-				log.Println("Error al detener el servidor:", err)
+			if err := shutdownServer(shutdownCtx, p.Echo); err != nil {
+				log.Printf("Error al detener el servidor: %v", err)
 			}
 
 			// Cerrar conexión a la base de datos
-			sqlDB, err := p.DB.DB()
-			if err != nil {
-				log.Println("Error al obtener la conexión sql.DB:", err)
-			} else {
-				if err := sqlDB.Close(); err != nil {
-					log.Println("Error al cerrar la conexión a la base de datos:", err)
-				}
+			if err := closeDatabase(p.DB); err != nil {
+				log.Printf("Error al cerrar la base de datos: %v", err)
 			}
+
+			log.Println("✅ Aplicación detenida correctamente")
 			return nil
 		},
 	})
+}
+
+// shutdownServer detiene el servidor HTTP.
+func shutdownServer(ctx context.Context, e *echo.Echo) error {
+	log.Println("🛑 Deteniendo servidor HTTP...")
+	return e.Shutdown(ctx)
+}
+
+// closeDatabase cierra la conexión a la base de datos.
+func closeDatabase(db *gorm.DB) error {
+	log.Println("🛑 Cerrando conexión a la base de datos...")
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Close()
 }
