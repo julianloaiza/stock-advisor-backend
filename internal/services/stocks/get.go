@@ -2,7 +2,6 @@ package stocks
 
 import (
 	"log"
-	"sort"
 
 	"github.com/julianloaiza/stock-advisor/internal/domain"
 )
@@ -12,26 +11,12 @@ func (s *service) GetStocks(query string, page, size int, recommends bool, minTa
 	log.Println("Ejecutando búsqueda de stocks")
 
 	// Obtener stocks paginados desde la base de datos
-	allStocks, total, err := s.repo.GetStocks(query, minTargetTo, maxTargetTo, currency, page, size)
+	// El repositorio ya se encarga de ordenar por RecommendScore si recommends es true
+	stocks, total, err := s.repo.GetStocks(query, page, size, recommends, minTargetTo, maxTargetTo, currency)
 	if err != nil {
 		log.Printf("Error al obtener stocks: %v", err)
 		return nil, 0, err
 	}
 
-	// Si no se solicitan recomendaciones, devolvemos los resultados tal cual
-	if !recommends {
-		return allStocks, total, nil
-	}
-
-	// Si se solicita recomendación, reordenamos los resultados
-	sortStocksByRecommendation(allStocks)
-
-	return allStocks, total, nil
-}
-
-// sortStocksByRecommendation ordena los stocks según su puntuación de recomendación
-func sortStocksByRecommendation(stocks []domain.Stock) {
-	sort.Slice(stocks, func(i, j int) bool {
-		return recommendationScore(stocks[i]) > recommendationScore(stocks[j])
-	})
+	return stocks, total, nil
 }

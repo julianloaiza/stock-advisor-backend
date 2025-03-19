@@ -13,8 +13,8 @@ type mockStockRepository struct {
 	mock.Mock
 }
 
-func (m *mockStockRepository) GetStocks(query string, minTargetTo, maxTargetTo float64, currency string, page, size int) ([]domain.Stock, int64, error) {
-	args := m.Called(query, minTargetTo, maxTargetTo, currency, page, size)
+func (m *mockStockRepository) GetStocks(query string, page, size int, recommends bool, minTargetTo, maxTargetTo float64, currency string) ([]domain.Stock, int64, error) {
+	args := m.Called(query, page, size, recommends, minTargetTo, maxTargetTo, currency)
 	return args.Get(0).([]domain.Stock), args.Get(1).(int64), args.Error(2)
 }
 
@@ -28,34 +28,36 @@ func TestGetStocks_BasicQuery(t *testing.T) {
 	// Crear datos de prueba
 	mockStocks := []domain.Stock{
 		{
-			ID:         1,
-			Ticker:     "AAPL",
-			Company:    "Apple Inc.",
-			Brokerage:  "Example Broker",
-			Action:     "upgraded by",
-			RatingFrom: "Hold",
-			RatingTo:   "Buy",
-			TargetFrom: 150.0,
-			TargetTo:   180.0,
-			Currency:   "USD",
+			ID:             1,
+			Ticker:         "AAPL",
+			Company:        "Apple Inc.",
+			Brokerage:      "Example Broker",
+			Action:         "upgraded by",
+			RatingFrom:     "Hold",
+			RatingTo:       "Buy",
+			TargetFrom:     150.0,
+			TargetTo:       180.0,
+			Currency:       "USD",
+			RecommendScore: 75.0,
 		},
 		{
-			ID:         2,
-			Ticker:     "MSFT",
-			Company:    "Microsoft Corporation",
-			Brokerage:  "Another Broker",
-			Action:     "reiterated by",
-			RatingFrom: "Buy",
-			RatingTo:   "Buy",
-			TargetFrom: 300.0,
-			TargetTo:   350.0,
-			Currency:   "USD",
+			ID:             2,
+			Ticker:         "MSFT",
+			Company:        "Microsoft Corporation",
+			Brokerage:      "Another Broker",
+			Action:         "reiterated by",
+			RatingFrom:     "Buy",
+			RatingTo:       "Buy",
+			TargetFrom:     300.0,
+			TargetTo:       350.0,
+			Currency:       "USD",
+			RecommendScore: 65.0,
 		},
 	}
 
 	// Crear repositorio mock
 	mockRepo := new(mockStockRepository)
-	mockRepo.On("GetStocks", "tech", 0.0, 0.0, "USD", 1, 10).Return(mockStocks, int64(2), nil)
+	mockRepo.On("GetStocks", "tech", 1, 10, false, 0.0, 0.0, "USD").Return(mockStocks, int64(2), nil)
 
 	// Crear el servicio con el repositorio mock
 	s := &service{repo: mockRepo}
@@ -74,41 +76,44 @@ func TestGetStocks_BasicQuery(t *testing.T) {
 	mockRepo.AssertExpectations(t)
 }
 
-// TestGetStocks_WithRecommendations prueba la funcionalidad de recomendaciones
+// TestGetStocks_WithRecommendations prueba la consulta con recomendaciones
 func TestGetStocks_WithRecommendations(t *testing.T) {
-	// Crear datos de prueba que incluyen stocks con diferentes puntuaciones potenciales
+	// Crear datos de prueba que ya vienen ordenados por RecommendScore desde el repositorio
 	mockStocks := []domain.Stock{
 		{
-			// Stock con puntuación baja (debe aparecer después en las recomendaciones)
-			ID:         1,
-			Ticker:     "LOW",
-			Company:    "Low Score Inc.",
-			Brokerage:  "Broker A",
-			Action:     "reiterated by",
-			RatingFrom: "Hold",
-			RatingTo:   "Hold",
-			TargetFrom: 100.0,
-			TargetTo:   101.0, // Pequeña diferencia
-			Currency:   "USD",
+			// Stock con puntuación alta (debe aparecer primero)
+			ID:             2,
+			Ticker:         "HIGH",
+			Company:        "High Score Corp.",
+			Brokerage:      "Broker B",
+			Action:         "upgraded by",
+			RatingFrom:     "Hold",
+			RatingTo:       "Strong-Buy",
+			TargetFrom:     200.0,
+			TargetTo:       300.0,
+			Currency:       "USD",
+			RecommendScore: 95.0,
 		},
 		{
-			// Stock con puntuación alta (debe aparecer primero en las recomendaciones)
-			ID:         2,
-			Ticker:     "HIGH",
-			Company:    "High Score Corp.",
-			Brokerage:  "Broker B",
-			Action:     "upgraded by",
-			RatingFrom: "Hold",
-			RatingTo:   "Strong-Buy",
-			TargetFrom: 200.0,
-			TargetTo:   300.0, // Gran diferencia
-			Currency:   "USD",
+			// Stock con puntuación baja (debe aparecer después)
+			ID:             1,
+			Ticker:         "LOW",
+			Company:        "Low Score Inc.",
+			Brokerage:      "Broker A",
+			Action:         "reiterated by",
+			RatingFrom:     "Hold",
+			RatingTo:       "Hold",
+			TargetFrom:     100.0,
+			TargetTo:       101.0,
+			Currency:       "USD",
+			RecommendScore: 25.0,
 		},
 	}
 
 	// Crear repositorio mock
 	mockRepo := new(mockStockRepository)
-	mockRepo.On("GetStocks", "invest", 0.0, 0.0, "USD", 1, 10).Return(mockStocks, int64(2), nil)
+	// El repositorio ya ordenó los datos por RecommendScore porque recommends=true
+	mockRepo.On("GetStocks", "invest", 1, 10, true, 0.0, 0.0, "USD").Return(mockStocks, int64(2), nil)
 
 	// Crear el servicio con el repositorio mock
 	s := &service{repo: mockRepo}
@@ -121,8 +126,7 @@ func TestGetStocks_WithRecommendations(t *testing.T) {
 	assert.Equal(t, int64(2), total)
 	assert.Equal(t, 2, len(result))
 
-	// Verificar que el resultado está ordenado por recomendación
-	// El stock con puntuación más alta debe aparecer primero
+	// Verificar que los stocks mantienen el orden que vino del repositorio
 	assert.Equal(t, "HIGH", result[0].Ticker)
 	assert.Equal(t, "LOW", result[1].Ticker)
 
@@ -135,22 +139,23 @@ func TestGetStocks_WithFilters(t *testing.T) {
 	// Crear datos de prueba
 	mockStocks := []domain.Stock{
 		{
-			ID:         1,
-			Ticker:     "EUR",
-			Company:    "Euro Stock",
-			Brokerage:  "European Broker",
-			Action:     "upgraded by",
-			RatingFrom: "Hold",
-			RatingTo:   "Buy",
-			TargetFrom: 50.0,
-			TargetTo:   75.0,
-			Currency:   "EUR",
+			ID:             1,
+			Ticker:         "EUR",
+			Company:        "Euro Stock",
+			Brokerage:      "European Broker",
+			Action:         "upgraded by",
+			RatingFrom:     "Hold",
+			RatingTo:       "Buy",
+			TargetFrom:     50.0,
+			TargetTo:       75.0,
+			Currency:       "EUR",
+			RecommendScore: 60.0,
 		},
 	}
 
 	// Crear repositorio mock
 	mockRepo := new(mockStockRepository)
-	mockRepo.On("GetStocks", "", 50.0, 100.0, "EUR", 1, 20).Return(mockStocks, int64(1), nil)
+	mockRepo.On("GetStocks", "", 1, 20, false, 50.0, 100.0, "EUR").Return(mockStocks, int64(1), nil)
 
 	// Crear el servicio con el repositorio mock
 	s := &service{repo: mockRepo}

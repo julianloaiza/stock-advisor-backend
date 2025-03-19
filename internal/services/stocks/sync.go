@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -32,36 +30,33 @@ func (s *service) syncStocks(ctx context.Context, limit int) error {
 
 	log.Println("🔄 Iniciando sincronización con la API")
 
-	// Configurar cliente HTTP y parámetros de la API
-	client := &http.Client{}
-	baseURL := s.cfg.StockAPIURL
-	authToken := "Bearer " + s.cfg.StockAPIKey
-
 	// Variables para control de iteración
 	var nextPage string
 	seenTokens := make(map[string]bool)
 
 	// Iterar para obtener datos paginados
 	for i := 1; i <= limit; i++ {
-		// Construir URL con parámetro de paginación
-		url := s.constructURL(baseURL, nextPage)
-
-		// Realizar solicitud HTTP
-		resp, err := s.makeRequest(ctx, client, url, authToken)
-		if err != nil {
-			return fmt.Errorf("error en solicitud HTTP: %w", err)
+		// Preparar parámetros para la solicitud
+		params := make(map[string]string)
+		if nextPage != "" {
+			params["next_page"] = nextPage
 		}
 
-		// Leer respuesta
-		body, err := s.readResponseBody(resp)
+		// Realizar solicitud a la API
+		responseData, err := s.apiClient.Get(ctx, "", params)
 		if err != nil {
-			return fmt.Errorf("error leyendo respuesta: %w", err)
+			return fmt.Errorf("error en iteración %d: %w", i, err)
 		}
 
-		// Parsear JSON
-		result, err := s.parseResponseBody(body)
-		if err != nil {
-			return fmt.Errorf("error parseando JSON: %w", err)
+		// Definir estructura para la respuesta
+		var result struct {
+			Items    []map[string]interface{} `json:"items"`
+			NextPage string                   `json:"next_page"`
+		}
+
+		// Deserializar la respuesta
+		if err := json.Unmarshal(responseData, &result); err != nil {
+			return fmt.Errorf("error parseando JSON en iteración %d: %w", i, err)
 		}
 
 		log.Printf("Iteración %d: next_page value = %s", i, result.NextPage)
@@ -105,63 +100,6 @@ func (s *service) validateLimit(limit int) int {
 	return limit
 }
 
-// constructURL construye la URL con parámetro de paginación
-func (s *service) constructURL(baseURL, nextPage string) string {
-	if nextPage != "" {
-		return fmt.Sprintf("%s?next_page=%s", baseURL, nextPage)
-	}
-	return baseURL
-}
-
-// makeRequest realiza la solicitud HTTP
-func (s *service) makeRequest(ctx context.Context, client *http.Client, url, authToken string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("error creando request: %w", err)
-	}
-
-	// Configurar headers
-	req.Header.Set("Authorization", authToken)
-	req.Header.Set("Content-Type", "application/json")
-
-	// Ejecutar solicitud
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("error en solicitud HTTP: %w", err)
-	}
-
-	// Verificar código de respuesta
-	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		return nil, fmt.Errorf("status code inesperado: %d", resp.StatusCode)
-	}
-
-	return resp, nil
-}
-
-// readResponseBody lee el cuerpo de la respuesta HTTP
-func (s *service) readResponseBody(resp *http.Response) ([]byte, error) {
-	defer resp.Body.Close()
-	return io.ReadAll(resp.Body)
-}
-
-// parseResponseBody decodifica el JSON de respuesta
-func (s *service) parseResponseBody(body []byte) (*struct {
-	Items    []map[string]interface{} `json:"items"`
-	NextPage string                   `json:"next_page"`
-}, error) {
-	var result struct {
-		Items    []map[string]interface{} `json:"items"`
-		NextPage string                   `json:"next_page"`
-	}
-
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("error decodificando JSON: %w", err)
-	}
-
-	return &result, nil
-}
-
 // shouldTerminateSync determina si la sincronización debe terminar
 func (s *service) shouldTerminateSync(nextPage string, seenTokens map[string]bool) bool {
 	// Sin más páginas
@@ -194,7 +132,7 @@ func (s *service) replaceAllStocks(allStocks []domain.Stock) error {
 	return nil
 }
 
-// parseStock convierte un mapa a un objeto domain.Stock
+// parseStock convierte un mapa a un objeto domain.Stock y le asigna una puntuación de recomendación
 func (s *service) parseStock(item map[string]interface{}) (domain.Stock, error) {
 	var stock domain.Stock
 
@@ -243,6 +181,9 @@ func (s *service) parseStock(item map[string]interface{}) (domain.Stock, error) 
 		TargetTo:   targetTo,
 		Currency:   currency,
 	}
+
+	// Calcular y asignar la puntuación de recomendación
+	stock.RecommendScore = recommendationScore(stock)
 
 	return stock, nil
 }

@@ -11,7 +11,7 @@ type Repository interface {
 	ReplaceAllStocks(stocks []domain.Stock) error
 
 	// GetStocks obtiene los stocks filtrados, aplicando paginación en la base de datos.
-	GetStocks(query string, minTargetTo, maxTargetTo float64, currency string, page, size int) ([]domain.Stock, int64, error)
+	GetStocks(query string, page, size int, recommends bool, minTargetTo, maxTargetTo float64, currency string) ([]domain.Stock, int64, error)
 }
 
 // repository implementa la interfaz Repository.

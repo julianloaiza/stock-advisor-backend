@@ -25,8 +25,8 @@ func (m *MockRepository) ReplaceAllStocks(stocks []domain.Stock) error {
 }
 
 // GetStocks implementa el método del repositorio para cumplir con la interfaz
-func (m *MockRepository) GetStocks(query string, minTargetTo, maxTargetTo float64, currency string, page, size int) ([]domain.Stock, int64, error) {
-	args := m.Called(query, minTargetTo, maxTargetTo, currency, page, size)
+func (m *MockRepository) GetStocks(query string, page, size int, recommends bool, minTargetTo, maxTargetTo float64, currency string) ([]domain.Stock, int64, error) {
+	args := m.Called(query, page, size, recommends, minTargetTo, maxTargetTo, currency)
 	return args.Get(0).([]domain.Stock), args.Get(1).(int64), args.Error(2)
 }
 
@@ -112,6 +112,9 @@ func TestSyncStocks_Success(t *testing.T) {
 			assert.Equal(t, "AAPL", stocks[0].Ticker, "El ticker debería ser AAPL")
 			assert.Equal(t, "Apple Inc.", stocks[0].Company, "La compañía debería ser Apple Inc.")
 			assert.Equal(t, 180.0, stocks[0].TargetTo, "El target_to debería ser 180.0")
+
+			// Verificar que el puntaje de recomendación se haya calculado
+			assert.Greater(t, stocks[0].RecommendScore, float64(0), "El puntaje de recomendación debería ser mayor que cero")
 		}
 	}
 }
@@ -221,6 +224,68 @@ func TestSyncStocks_InvalidLimit(t *testing.T) {
 	assert.NotContains(t, err.Error(), "límite inválido", "El error no debería estar relacionado con el límite")
 }
 
+// TestParseStock_WithRecommendScore verifica que parseStock calcule correctamente el puntaje de recomendación
+func TestParseStock_WithRecommendScore(t *testing.T) {
+	// Crear mock del repositorio
+	mockRepo := new(MockRepository)
+
+	// Crear configuración mock
+	mockCfg := createMockConfig("http://example.com", "test-api-key", 10, 30)
+
+	// Crear el servicio
+	svc := NewService(mockRepo, mockCfg)
+
+	// Crear un mapa que simula un item de la API
+	item := map[string]interface{}{
+		"ticker":      "NVDA",
+		"company":     "NVIDIA Corporation",
+		"brokerage":   "Example Brokerage",
+		"action":      "upgraded by",
+		"rating_from": "Hold",
+		"rating_to":   "Buy",
+		"target_from": "500.00",
+		"target_to":   "650.00",
+		"currency":    "USD",
+	}
+
+	// Parsear el stock
+	stock, err := svc.parseStock(item)
+
+	// Verificar que no hay error
+	assert.NoError(t, err, "El parseo debería ser exitoso")
+
+	// Verificar que los datos se han parseado correctamente
+	assert.Equal(t, "NVDA", stock.Ticker)
+	assert.Equal(t, "NVIDIA Corporation", stock.Company)
+	assert.Equal(t, 650.0, stock.TargetTo)
+
+	// Verificar que el puntaje de recomendación se ha calculado
+	assert.Greater(t, stock.RecommendScore, float64(0), "El puntaje de recomendación debería ser mayor que cero")
+
+	// Crear otro item con valores que deberían generar un puntaje diferente
+	item2 := map[string]interface{}{
+		"ticker":      "META",
+		"company":     "Meta Platforms Inc.",
+		"brokerage":   "Example Brokerage",
+		"action":      "downgraded by", // Esta acción debería reducir el puntaje
+		"rating_from": "Buy",
+		"rating_to":   "Hold", // Esta calificación debería reducir el puntaje
+		"target_from": "400.00",
+		"target_to":   "350.00", // Objetivo reducido debería reducir el puntaje
+		"currency":    "USD",
+	}
+
+	// Parsear el segundo stock
+	stock2, err := svc.parseStock(item2)
+
+	// Verificar que no hay error
+	assert.NoError(t, err, "El parseo debería ser exitoso")
+
+	// Verificar que el puntaje para un stock "downgraded" es menor
+	assert.Less(t, stock2.RecommendScore, stock.RecommendScore,
+		"El puntaje de un stock degradado debería ser menor que el de un stock mejorado")
+}
+
 // NewService crea un nuevo servicio para las pruebas
 func NewService(repo Repository, cfg *config.Config) *service {
 	return &service{
@@ -231,6 +296,6 @@ func NewService(repo Repository, cfg *config.Config) *service {
 
 // Repository define la interfaz del repositorio
 type Repository interface {
-	GetStocks(query string, minTargetTo, maxTargetTo float64, currency string, page, size int) ([]domain.Stock, int64, error)
+	GetStocks(query string, page, size int, recommends bool, minTargetTo, maxTargetTo float64, currency string) ([]domain.Stock, int64, error)
 	ReplaceAllStocks(stocks []domain.Stock) error
 }

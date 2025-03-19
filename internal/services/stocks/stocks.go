@@ -6,6 +6,7 @@ import (
 	"github.com/julianloaiza/stock-advisor/config"
 	"github.com/julianloaiza/stock-advisor/internal/domain"
 	repo "github.com/julianloaiza/stock-advisor/internal/repositories/stocks"
+	"github.com/julianloaiza/stock-advisor/internal/services/apiClient"
 )
 
 // Service define las operaciones relacionadas con stocks.
@@ -19,14 +20,16 @@ type Service interface {
 
 // service implementa la interfaz Service.
 type service struct {
-	repo repo.Repository
-	cfg  *config.Config
+	repo      repo.Repository
+	cfg       *config.Config
+	apiClient apiClient.Client
 }
 
 // New crea una nueva instancia del servicio de stocks.
-func New(repo repo.Repository, cfg *config.Config) Service {
+func New(repo repo.Repository, cfg *config.Config, apiClient apiClient.Client) Service {
 	return &service{
-		repo: repo,
-		cfg:  cfg,
+		repo:      repo,
+		cfg:       cfg,
+		apiClient: apiClient,
 	}
 }

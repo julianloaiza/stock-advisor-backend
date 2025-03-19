@@ -8,7 +8,7 @@ import (
 )
 
 // GetStocks obtiene los stocks filtrados, aplicando paginación en la base de datos.
-func (r *repository) GetStocks(query string, minTargetTo, maxTargetTo float64, currency string, page, size int) ([]domain.Stock, int64, error) {
+func (r *repository) GetStocks(query string, page, size int, recommends bool, minTargetTo, maxTargetTo float64, currency string) ([]domain.Stock, int64, error) {
 	var stocks []domain.Stock
 	var total int64
 
@@ -17,6 +17,11 @@ func (r *repository) GetStocks(query string, minTargetTo, maxTargetTo float64, c
 
 	// Construimos la consulta base
 	dbQuery := r.buildBaseQuery(query, minTargetTo, maxTargetTo, currency)
+
+	// Si se solicitan recomendaciones, ordenamos por el puntaje de recomendación en orden descendente
+	if recommends {
+		dbQuery = dbQuery.Order("recommend_score DESC")
+	}
 
 	// Contamos el total de registros sin paginar
 	if err := dbQuery.Count(&total).Error; err != nil {
