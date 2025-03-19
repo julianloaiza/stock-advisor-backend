@@ -3,12 +3,19 @@ package stocks
 import (
 	"testing"
 
+	"github.com/julianloaiza/stock-advisor/config"
 	"github.com/julianloaiza/stock-advisor/internal/domain"
 	"github.com/stretchr/testify/assert"
 )
 
 // TestCalculateRecommendationScore verifica el algoritmo de puntuación de recomendaciones
 func TestCalculateRecommendationScore(t *testing.T) {
+	// Crear una instancia del servicio para pruebas
+	cfg := &config.Config{}
+	svc := &service{
+		cfg: cfg,
+	}
+
 	// Casos de prueba para diferentes escenarios de puntuación
 	testCases := []struct {
 		name     string
@@ -56,8 +63,8 @@ func TestCalculateRecommendationScore(t *testing.T) {
 	// Iterar sobre los casos de prueba
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Calcular la puntuación de recomendación
-			score := recommendationScore(tc.stock)
+			// Calcular la puntuación de recomendación usando el método del servicio
+			score := svc.recommendationScore(tc.stock)
 
 			// Verificar que la puntuación sea exactamente la esperada
 			assert.Equal(t, tc.expected, score,
@@ -68,6 +75,12 @@ func TestCalculateRecommendationScore(t *testing.T) {
 
 // TestRecommendationScoreComparison verifica que las acciones con mejores características tengan mayores puntuaciones
 func TestRecommendationScoreComparison(t *testing.T) {
+	// Crear una instancia del servicio para pruebas
+	cfg := &config.Config{}
+	svc := &service{
+		cfg: cfg,
+	}
+
 	testCases := []struct {
 		name  string
 		stock domain.Stock
@@ -108,9 +121,9 @@ func TestRecommendationScoreComparison(t *testing.T) {
 	}
 
 	// Verificar que las puntuaciones se ordenan como se espera (mayor a menor)
-	highScore := recommendationScore(testCases[0].stock)
-	midScore := recommendationScore(testCases[1].stock)
-	lowScore := recommendationScore(testCases[2].stock)
+	highScore := svc.recommendationScore(testCases[0].stock)
+	midScore := svc.recommendationScore(testCases[1].stock)
+	lowScore := svc.recommendationScore(testCases[2].stock)
 
 	assert.Greater(t, highScore, midScore,
 		"La puntuación del caso 'Alta Puntuación' debe ser mayor que 'Puntuación Media'")
@@ -120,6 +133,12 @@ func TestRecommendationScoreComparison(t *testing.T) {
 
 // TestNegativeScenarios verifica que el algoritmo maneje correctamente escenarios negativos
 func TestNegativeScenarios(t *testing.T) {
+	// Crear una instancia del servicio para pruebas
+	cfg := &config.Config{}
+	svc := &service{
+		cfg: cfg,
+	}
+
 	testCases := []struct {
 		name  string
 		stock domain.Stock
@@ -157,11 +176,11 @@ func TestNegativeScenarios(t *testing.T) {
 		TargetFrom: 100.0,
 		TargetTo:   100.0,
 	}
-	neutralScore := recommendationScore(neutralStock)
+	neutralScore := svc.recommendationScore(neutralStock)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			negativeScore := recommendationScore(tc.stock)
+			negativeScore := svc.recommendationScore(tc.stock)
 			assert.Less(t, negativeScore, neutralScore,
 				"La puntuación para %s debe ser menor que para una acción neutral", tc.name)
 		})

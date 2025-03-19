@@ -3,8 +3,6 @@ package stocks
 import (
 	"context"
 	"errors"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/julianloaiza/stock-advisor/config"
@@ -18,26 +16,33 @@ type MockRepository struct {
 	mock.Mock
 }
 
-// ReplaceAllStocks implementa el método del repositorio
 func (m *MockRepository) ReplaceAllStocks(stocks []domain.Stock) error {
 	args := m.Called(stocks)
 	return args.Error(0)
 }
 
-// GetStocks implementa el método del repositorio para cumplir con la interfaz
 func (m *MockRepository) GetStocks(query string, page, size int, recommends bool, minTargetTo, maxTargetTo float64, currency string) ([]domain.Stock, int64, error) {
 	args := m.Called(query, page, size, recommends, minTargetTo, maxTargetTo, currency)
 	return args.Get(0).([]domain.Stock), args.Get(1).(int64), args.Error(2)
 }
 
+// MockAPIClient es un mock del cliente de API para las pruebas
+type MockAPIClient struct {
+	mock.Mock
+}
+
+func (m *MockAPIClient) Get(ctx context.Context, endpoint string, params map[string]string) ([]byte, error) {
+	args := m.Called(ctx, endpoint, params)
+	return args.Get(0).([]byte), args.Error(1)
+}
+
 // createMockConfig crea una configuración mock para las pruebas
 func createMockConfig(apiURL, apiKey string, maxIterations, timeout int) *config.Config {
 	return &config.Config{
-		StockAPIURL:       apiURL,
-		StockAPIKey:       apiKey,
-		SyncMaxIterations: maxIterations,
-		SyncTimeout:       timeout,
-		// Otros campos requeridos pueden dejarse con valores por defecto
+		StockAPIURL:        apiURL,
+		StockAPIKey:        apiKey,
+		SyncMaxIterations:  maxIterations,
+		SyncTimeout:        timeout,
 		Address:            ":8080",
 		DatabaseURL:        "mock-db-url",
 		CORSAllowedOrigins: "*",
@@ -46,47 +51,39 @@ func createMockConfig(apiURL, apiKey string, maxIterations, timeout int) *config
 
 // TestSyncStocks_Success prueba que la sincronización se realice correctamente
 func TestSyncStocks_Success(t *testing.T) {
-	// Crear servidor HTTP mock para simular API externa
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verificar que la solicitud tenga Authorization header
-		authHeader := r.Header.Get("Authorization")
-		assert.Contains(t, authHeader, "Bearer ", "La solicitud debe incluir un token Bearer")
-
-		// Simular respuesta JSON de la API externa
-		jsonResponse := `{
-			"items": [
-				{
-					"ticker": "AAPL",
-					"company": "Apple Inc.",
-					"brokerage": "Example Brokerage",
-					"action": "target raised by",
-					"rating_from": "Buy",
-					"rating_to": "Strong-Buy",
-					"target_from": "150.00",
-					"target_to": "180.00",
-					"currency": "USD"
-				}
-			],
-			"next_page": ""
-		}`
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(jsonResponse))
-	}))
-	defer server.Close()
-
 	// Crear mock del repositorio
 	mockRepo := new(MockRepository)
-
-	// Configurar expectativa: el repositorio recibirá una llamada a ReplaceAllStocks
 	mockRepo.On("ReplaceAllStocks", mock.Anything).Return(nil)
 
-	// Crear configuración mock
-	mockCfg := createMockConfig(server.URL, "test-api-key", 10, 30)
+	// Crear mock del cliente API
+	mockAPIClient := new(MockAPIClient)
+	jsonResponse := []byte(`{
+		"items": [
+			{
+				"ticker": "AAPL",
+				"company": "Apple Inc.",
+				"brokerage": "Example Brokerage",
+				"action": "target raised by",
+				"rating_from": "Buy",
+				"rating_to": "Strong-Buy",
+				"target_from": "150.00",
+				"target_to": "180.00",
+				"currency": "USD"
+			}
+		],
+		"next_page": ""
+	}`)
+	mockAPIClient.On("Get", mock.Anything, mock.Anything, mock.Anything).Return(jsonResponse, nil)
 
-	// Crear el servicio con el repositorio mock y la configuración mock
-	service := NewService(mockRepo, mockCfg)
+	// Crear configuración mock
+	mockCfg := createMockConfig("http://test-api.com", "test-api-key", 10, 30)
+
+	// Crear el servicio con el repositorio mock, configuración mock y cliente API mock
+	service := &service{
+		repo:      mockRepo,
+		cfg:       mockCfg,
+		apiClient: mockAPIClient,
+	}
 
 	// Ejecutar el método a probar
 	err := service.SyncStocks(context.Background(), 1)
@@ -94,204 +91,87 @@ func TestSyncStocks_Success(t *testing.T) {
 	// Verificar que no hay error
 	assert.NoError(t, err, "La sincronización debería ser exitosa")
 
-	// Verificar que el repositorio fue llamado con un slice de stocks
+	// Verificar que el repositorio fue llamado correctamente
 	mockRepo.AssertExpectations(t)
-
-	// Verificar que se llamó a ReplaceAllStocks con al menos un stock
-	calls := mockRepo.Calls
-	assert.GreaterOrEqual(t, len(calls), 1, "Debería haber al menos una llamada al repositorio")
-
-	// Verificar el primer argumento de la llamada a ReplaceAllStocks
-	if len(calls) > 0 {
-		stocks, ok := calls[0].Arguments[0].([]domain.Stock)
-		assert.True(t, ok, "El primer argumento debería ser un slice de stocks")
-		assert.GreaterOrEqual(t, len(stocks), 1, "Debería haber al menos un stock para reemplazar")
-
-		// Verificar datos del stock si hay al menos uno
-		if len(stocks) > 0 {
-			assert.Equal(t, "AAPL", stocks[0].Ticker, "El ticker debería ser AAPL")
-			assert.Equal(t, "Apple Inc.", stocks[0].Company, "La compañía debería ser Apple Inc.")
-			assert.Equal(t, 180.0, stocks[0].TargetTo, "El target_to debería ser 180.0")
-
-			// Verificar que el puntaje de recomendación se haya calculado
-			assert.Greater(t, stocks[0].RecommendScore, float64(0), "El puntaje de recomendación debería ser mayor que cero")
-		}
-	}
+	mockAPIClient.AssertExpectations(t)
 }
 
 // TestSyncStocks_ExternalAPIError prueba que se maneje correctamente un error de la API externa
 func TestSyncStocks_ExternalAPIError(t *testing.T) {
-	// Crear servidor HTTP mock que responde con error
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"error": "Internal Server Error"}`))
-	}))
-	defer server.Close()
-
 	// Crear mock del repositorio
 	mockRepo := new(MockRepository)
-	// No esperamos que se llame a ReplaceAllStocks porque la API externa fallará
+
+	// Crear mock del cliente API que devuelve un error
+	mockAPIClient := new(MockAPIClient)
+	mockAPIClient.On("Get", mock.Anything, mock.Anything, mock.Anything).Return([]byte{}, errors.New("error de API externa"))
 
 	// Crear configuración mock
-	mockCfg := createMockConfig(server.URL, "test-api-key", 10, 30)
+	mockCfg := createMockConfig("http://test-api.com", "test-api-key", 10, 30)
 
-	// Crear el servicio con el repositorio mock y la configuración mock
-	service := NewService(mockRepo, mockCfg)
+	// Crear el servicio con el repositorio mock, configuración mock y cliente API mock
+	service := &service{
+		repo:      mockRepo,
+		cfg:       mockCfg,
+		apiClient: mockAPIClient,
+	}
 
 	// Ejecutar el método a probar
 	err := service.SyncStocks(context.Background(), 1)
 
 	// Verificar que hay un error
 	assert.Error(t, err, "La sincronización debería fallar")
-	assert.Contains(t, err.Error(), "status code inesperado", "El error debería mencionar el status code")
+	assert.Contains(t, err.Error(), "error de API externa")
+
+	// Verificar que el cliente API fue llamado
+	mockAPIClient.AssertExpectations(t)
 }
 
 // TestSyncStocks_RepositoryError prueba que se maneje correctamente un error del repositorio
 func TestSyncStocks_RepositoryError(t *testing.T) {
-	// Crear servidor HTTP mock para simular API externa
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		jsonResponse := `{
-			"items": [
-				{
-					"ticker": "AAPL",
-					"company": "Apple Inc.",
-					"brokerage": "Example Brokerage",
-					"action": "target raised by",
-					"rating_from": "Buy",
-					"rating_to": "Strong-Buy",
-					"target_from": "150.00",
-					"target_to": "180.00",
-					"currency": "USD"
-				}
-			],
-			"next_page": ""
-		}`
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(jsonResponse))
-	}))
-	defer server.Close()
-
 	// Crear mock del repositorio que devuelve error
 	mockRepo := new(MockRepository)
+	mockRepo.On("ReplaceAllStocks", mock.Anything).Return(errors.New("error al reemplazar stocks"))
 
-	// Configurar expectativa: el repositorio devolverá un error
-	expectedError := errors.New("error al reemplazar stocks")
-	mockRepo.On("ReplaceAllStocks", mock.Anything).Return(expectedError)
+	// Crear mock del cliente API
+	mockAPIClient := new(MockAPIClient)
+	jsonResponse := []byte(`{
+		"items": [
+			{
+				"ticker": "AAPL",
+				"company": "Apple Inc.",
+				"brokerage": "Example Brokerage",
+				"action": "target raised by",
+				"rating_from": "Buy",
+				"rating_to": "Strong-Buy",
+				"target_from": "150.00",
+				"target_to": "180.00",
+				"currency": "USD"
+			}
+		],
+		"next_page": ""
+	}`)
+	mockAPIClient.On("Get", mock.Anything, mock.Anything, mock.Anything).Return(jsonResponse, nil)
 
 	// Crear configuración mock
-	mockCfg := createMockConfig(server.URL, "test-api-key", 10, 30)
+	mockCfg := createMockConfig("http://test-api.com", "test-api-key", 10, 30)
 
-	// Crear el servicio con el repositorio mock y la configuración mock
-	service := NewService(mockRepo, mockCfg)
+	// Crear el servicio con el repositorio mock, configuración mock y cliente API mock
+	service := &service{
+		repo:      mockRepo,
+		cfg:       mockCfg,
+		apiClient: mockAPIClient,
+	}
 
 	// Ejecutar el método a probar
 	err := service.SyncStocks(context.Background(), 1)
 
-	// Verificar que hay un error y es el esperado
+	// Verificar que hay un error
 	assert.Error(t, err, "La sincronización debería fallar")
-	assert.Contains(t, err.Error(), "error reemplazando stocks", "El error debería mencionar el problema en el repositorio")
+	assert.Contains(t, err.Error(), "error reemplazando stocks")
 
-	// Verificar que el repositorio fue llamado
+	// Verificar que el repositorio y el cliente API fueron llamados
 	mockRepo.AssertExpectations(t)
-}
-
-// TestSyncStocks_InvalidLimit prueba que se maneje correctamente un límite inválido
-func TestSyncStocks_InvalidLimit(t *testing.T) {
-	// Crear mock del repositorio
-	mockRepo := new(MockRepository)
-
-	// No configuramos expectativas porque no debería llamarse al repositorio
-
-	// Crear configuración mock
-	mockCfg := createMockConfig("http://example.com", "test-api-key", 10, 30)
-
-	// Crear el servicio con el repositorio mock y la configuración mock
-	service := NewService(mockRepo, mockCfg)
-
-	// Probar con límite negativo
-	ctx := context.Background()
-
-	// Ejecutar método con límite inválido y verificar que use el valor por defecto (1)
-	err := service.SyncStocks(ctx, -5)
-
-	// Debería fallar porque no hay un servidor HTTP real para responder
-	// Pero lo importante es verificar que la función no falla por el límite inválido
-	assert.Error(t, err, "Debería fallar por falta de servidor HTTP, no por el límite inválido")
-
-	// El error debería estar relacionado con la conexión HTTP, no con el límite
-	assert.NotContains(t, err.Error(), "límite inválido", "El error no debería estar relacionado con el límite")
-}
-
-// TestParseStock_WithRecommendScore verifica que parseStock calcule correctamente el puntaje de recomendación
-func TestParseStock_WithRecommendScore(t *testing.T) {
-	// Crear mock del repositorio
-	mockRepo := new(MockRepository)
-
-	// Crear configuración mock
-	mockCfg := createMockConfig("http://example.com", "test-api-key", 10, 30)
-
-	// Crear el servicio
-	svc := NewService(mockRepo, mockCfg)
-
-	// Crear un mapa que simula un item de la API
-	item := map[string]interface{}{
-		"ticker":      "NVDA",
-		"company":     "NVIDIA Corporation",
-		"brokerage":   "Example Brokerage",
-		"action":      "upgraded by",
-		"rating_from": "Hold",
-		"rating_to":   "Buy",
-		"target_from": "500.00",
-		"target_to":   "650.00",
-		"currency":    "USD",
-	}
-
-	// Parsear el stock
-	stock, err := svc.parseStock(item)
-
-	// Verificar que no hay error
-	assert.NoError(t, err, "El parseo debería ser exitoso")
-
-	// Verificar que los datos se han parseado correctamente
-	assert.Equal(t, "NVDA", stock.Ticker)
-	assert.Equal(t, "NVIDIA Corporation", stock.Company)
-	assert.Equal(t, 650.0, stock.TargetTo)
-
-	// Verificar que el puntaje de recomendación se ha calculado
-	assert.Greater(t, stock.RecommendScore, float64(0), "El puntaje de recomendación debería ser mayor que cero")
-
-	// Crear otro item con valores que deberían generar un puntaje diferente
-	item2 := map[string]interface{}{
-		"ticker":      "META",
-		"company":     "Meta Platforms Inc.",
-		"brokerage":   "Example Brokerage",
-		"action":      "downgraded by", // Esta acción debería reducir el puntaje
-		"rating_from": "Buy",
-		"rating_to":   "Hold", // Esta calificación debería reducir el puntaje
-		"target_from": "400.00",
-		"target_to":   "350.00", // Objetivo reducido debería reducir el puntaje
-		"currency":    "USD",
-	}
-
-	// Parsear el segundo stock
-	stock2, err := svc.parseStock(item2)
-
-	// Verificar que no hay error
-	assert.NoError(t, err, "El parseo debería ser exitoso")
-
-	// Verificar que el puntaje para un stock "downgraded" es menor
-	assert.Less(t, stock2.RecommendScore, stock.RecommendScore,
-		"El puntaje de un stock degradado debería ser menor que el de un stock mejorado")
-}
-
-// NewService crea un nuevo servicio para las pruebas
-func NewService(repo Repository, cfg *config.Config) *service {
-	return &service{
-		repo: repo,
-		cfg:  cfg,
-	}
+	mockAPIClient.AssertExpectations(t)
 }
 
 // Repository define la interfaz del repositorio

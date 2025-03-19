@@ -33,7 +33,7 @@ func (s *service) parseStock(item map[string]interface{}) (domain.Stock, error) 
 	}
 
 	// Calcular y asignar la puntuación de recomendación
-	stock.RecommendScore = recommendationScore(stock)
+	stock.RecommendScore = s.recommendationScore(stock)
 
 	return stock, nil
 }

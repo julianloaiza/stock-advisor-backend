@@ -1,13 +1,10 @@
 // @title Stock Advisor API
 // @version 1.0
 // @description API para gestionar y consultar datos de acciones bursátiles
-// @termsOfService http://swagger.io/terms/
-// @contact.name API Support
-// @contact.email soporte@ejemplo.com
-// @license.name Apache 2.0
-// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
 // @host localhost:8080
 // @BasePath /
+// @tag.name Stocks
+// @tag.description Operaciones con acciones bursátiles
 package main
 
 import (

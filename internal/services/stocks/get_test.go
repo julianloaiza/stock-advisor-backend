@@ -28,30 +28,28 @@ func TestGetStocks_BasicQuery(t *testing.T) {
 	// Crear datos de prueba
 	mockStocks := []domain.Stock{
 		{
-			ID:             1,
-			Ticker:         "AAPL",
-			Company:        "Apple Inc.",
-			Brokerage:      "Example Broker",
-			Action:         "upgraded by",
-			RatingFrom:     "Hold",
-			RatingTo:       "Buy",
-			TargetFrom:     150.0,
-			TargetTo:       180.0,
-			Currency:       "USD",
-			RecommendScore: 75.0,
+			ID:         1,
+			Ticker:     "AAPL",
+			Company:    "Apple Inc.",
+			Brokerage:  "Example Broker",
+			Action:     "upgraded by",
+			RatingFrom: "Hold",
+			RatingTo:   "Buy",
+			TargetFrom: 150.0,
+			TargetTo:   180.0,
+			Currency:   "USD",
 		},
 		{
-			ID:             2,
-			Ticker:         "MSFT",
-			Company:        "Microsoft Corporation",
-			Brokerage:      "Another Broker",
-			Action:         "reiterated by",
-			RatingFrom:     "Buy",
-			RatingTo:       "Buy",
-			TargetFrom:     300.0,
-			TargetTo:       350.0,
-			Currency:       "USD",
-			RecommendScore: 65.0,
+			ID:         2,
+			Ticker:     "MSFT",
+			Company:    "Microsoft Corporation",
+			Brokerage:  "Another Broker",
+			Action:     "reiterated by",
+			RatingFrom: "Buy",
+			RatingTo:   "Buy",
+			TargetFrom: 300.0,
+			TargetTo:   350.0,
+			Currency:   "USD",
 		},
 	}
 
@@ -82,31 +80,29 @@ func TestGetStocks_WithRecommendations(t *testing.T) {
 	mockStocks := []domain.Stock{
 		{
 			// Stock con puntuación alta (debe aparecer primero)
-			ID:             2,
-			Ticker:         "HIGH",
-			Company:        "High Score Corp.",
-			Brokerage:      "Broker B",
-			Action:         "upgraded by",
-			RatingFrom:     "Hold",
-			RatingTo:       "Strong-Buy",
-			TargetFrom:     200.0,
-			TargetTo:       300.0,
-			Currency:       "USD",
-			RecommendScore: 95.0,
+			ID:         2,
+			Ticker:     "HIGH",
+			Company:    "High Score Corp.",
+			Brokerage:  "Broker B",
+			Action:     "upgraded by",
+			RatingFrom: "Hold",
+			RatingTo:   "Strong-Buy",
+			TargetFrom: 200.0,
+			TargetTo:   300.0,
+			Currency:   "USD",
 		},
 		{
 			// Stock con puntuación baja (debe aparecer después)
-			ID:             1,
-			Ticker:         "LOW",
-			Company:        "Low Score Inc.",
-			Brokerage:      "Broker A",
-			Action:         "reiterated by",
-			RatingFrom:     "Hold",
-			RatingTo:       "Hold",
-			TargetFrom:     100.0,
-			TargetTo:       101.0,
-			Currency:       "USD",
-			RecommendScore: 25.0,
+			ID:         1,
+			Ticker:     "LOW",
+			Company:    "Low Score Inc.",
+			Brokerage:  "Broker A",
+			Action:     "reiterated by",
+			RatingFrom: "Hold",
+			RatingTo:   "Hold",
+			TargetFrom: 100.0,
+			TargetTo:   101.0,
+			Currency:   "USD",
 		},
 	}
 
@@ -139,17 +135,16 @@ func TestGetStocks_WithFilters(t *testing.T) {
 	// Crear datos de prueba
 	mockStocks := []domain.Stock{
 		{
-			ID:             1,
-			Ticker:         "EUR",
-			Company:        "Euro Stock",
-			Brokerage:      "European Broker",
-			Action:         "upgraded by",
-			RatingFrom:     "Hold",
-			RatingTo:       "Buy",
-			TargetFrom:     50.0,
-			TargetTo:       75.0,
-			Currency:       "EUR",
-			RecommendScore: 60.0,
+			ID:         1,
+			Ticker:     "EUR",
+			Company:    "Euro Stock",
+			Brokerage:  "European Broker",
+			Action:     "upgraded by",
+			RatingFrom: "Hold",
+			RatingTo:   "Buy",
+			TargetFrom: 50.0,
+			TargetTo:   75.0,
+			Currency:   "EUR",
 		},
 	}
 
@@ -172,66 +167,4 @@ func TestGetStocks_WithFilters(t *testing.T) {
 
 	// Verificar que se llamó al método del repositorio con los parámetros correctos
 	mockRepo.AssertExpectations(t)
-}
-
-// TestRecommendationScore prueba que el algoritmo de recomendación funciona correctamente
-func TestRecommendationScore(t *testing.T) {
-	testCases := []struct {
-		name     string
-		stock    domain.Stock
-		expected bool // true si debe tener una puntuación más alta que el caso siguiente
-	}{
-		{
-			name: "Alta puntuación - Gran aumento de precio y mejora de calificación",
-			stock: domain.Stock{
-				Ticker:     "HIGH",
-				Action:     "upgraded by",
-				RatingFrom: "Hold",
-				RatingTo:   "Strong-Buy",
-				TargetFrom: 100.0,
-				TargetTo:   200.0, // 100% de aumento
-			},
-			expected: true,
-		},
-		{
-			name: "Puntuación media - Aumento moderado",
-			stock: domain.Stock{
-				Ticker:     "MED",
-				Action:     "target raised by",
-				RatingFrom: "Buy",
-				RatingTo:   "Buy",
-				TargetFrom: 100.0,
-				TargetTo:   130.0, // 30% de aumento
-			},
-			expected: true,
-		},
-		{
-			name: "Baja puntuación - Pequeño aumento",
-			stock: domain.Stock{
-				Ticker:     "LOW",
-				Action:     "reiterated by",
-				RatingFrom: "Hold",
-				RatingTo:   "Hold",
-				TargetFrom: 100.0,
-				TargetTo:   105.0, // 5% de aumento
-			},
-			expected: false,
-		},
-	}
-
-	// Comparar puntuaciones entre casos consecutivos
-	for i := 0; i < len(testCases)-1; i++ {
-		current := recommendationScore(testCases[i].stock)
-		next := recommendationScore(testCases[i+1].stock)
-
-		if testCases[i].expected {
-			assert.Greater(t, current, next,
-				"La puntuación de %s debería ser mayor que %s",
-				testCases[i].name, testCases[i+1].name)
-		} else {
-			assert.LessOrEqual(t, current, next,
-				"La puntuación de %s debería ser menor o igual que %s",
-				testCases[i].name, testCases[i+1].name)
-		}
-	}
 }

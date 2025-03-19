@@ -6,55 +6,162 @@ import (
 	"github.com/julianloaiza/stock-advisor/internal/domain"
 )
 
+// Mapas de puntuaciones preconfigurados
+var (
+	// Puntuaciones de calificaciones (incluyen valores negativos)
+	ratingScores = map[string]float64{
+		// Calificaciones muy positivas
+		"strong-buy": 25,
+		"strong buy": 25,
+		"buy":        20,
+		"outperform": 18,
+		"overweight": 15,
+
+		// Calificaciones positivas moderadas
+		"accumulate":        12,
+		"add":               12,
+		"sector outperform": 10,
+
+		// Calificaciones neutrales
+		"market perform": 5,
+		"sector perform": 5,
+		"equal weight":   5,
+		"in-line":        5,
+		"hold":           0,
+		"neutral":        0,
+
+		// Calificaciones negativas
+		"sector weight": -5,
+		"market weight": -5,
+		"underperform":  -10,
+		"underweight":   -10,
+		"reduce":        -15,
+		"sell":          -20,
+		"strong sell":   -25,
+	}
+
+	// Fragmentos de texto para acciones y sus puntuaciones
+	actionScorePatterns = map[string]float64{
+		"upgraded by":       15,  // Mejora en la calificación
+		"target raised by":  12,  // Aumento del precio objetivo
+		"initiated by":      8,   // Nueva cobertura
+		"reiterated by":     5,   // Reiteración
+		"target set by":     3,   // Establecimiento de precio objetivo
+		"target lowered by": -10, // Reducción del precio objetivo
+		"downgraded by":     -12, // Degradación en la calificación
+	}
+
+	// Calificaciones consideradas negativas para ajustes posteriores
+	negativeRatings = map[string]bool{
+		"underperform": true,
+		"underweight":  true,
+		"reduce":       true,
+		"sell":         true,
+		"strong sell":  true,
+	}
+)
+
+// Factores de ponderación para el cálculo de recomendación
+const (
+	percentDiffWeight   = 0.35 // Cambio porcentual en precio objetivo
+	ratingWeight        = 0.30 // Calificación del analista
+	actionWeight        = 0.20 // Tipo de acción tomada
+	absoluteBonusWeight = 0.15 // Magnitud absoluta del cambio
+
+	// Factores de ajuste
+	decreasingTargetFactor = 0.4 // Factor para precios objetivo decrecientes
+	negativeRatingFactor   = 0.6 // Factor para calificaciones negativas con score positivo
+)
+
+// Estructura para mantener los puntajes base
+type baseScoreComponents struct {
+	percentDiff   float64
+	ratingScore   float64
+	actionScore   float64
+	absoluteBonus float64
+}
+
 // recommendationScore calcula un puntaje de recomendación para una acción.
 // Utiliza un enfoque balanceado para evaluar el potencial de inversión.
-func recommendationScore(s domain.Stock) float64 {
-	// Factores de ponderación
-	const (
-		percentDiffWeight   = 0.35 // Cambio porcentual en precio objetivo
-		ratingWeight        = 0.30 // Calificación del analista
-		actionWeight        = 0.20 // Tipo de acción tomada
-		absoluteBonusWeight = 0.15 // Magnitud absoluta del cambio (aumentado para dar más peso)
-	)
+func (s *service) recommendationScore(stock domain.Stock) float64 {
+	// 1. Calcular componentes individuales
+	baseScores := s.calculateBaseScores(stock)
 
-	// Calcular componentes individuales
-	percentDiff := calculatePercentDiff(s.TargetFrom, s.TargetTo)
-	ratingScore := calculateRatingScore(s.RatingTo) // Solo usamos la calificación final
-	actionScore := calculateActionScore(s.Action)
-	absoluteBonus := calculateAbsoluteBonus(s.TargetFrom, s.TargetTo)
+	// 2. Aplicar factores externos (empresas, brokerages, etc.)
+	adjustedScores := s.applyExternalFactors(stock, baseScores)
 
-	// Aplicar ponderaciones
-	weightedScore := (percentDiff * percentDiffWeight) +
-		(ratingScore * ratingWeight) +
-		(actionScore * actionWeight) +
-		(absoluteBonus * absoluteBonusWeight)
+	// 3. Calcular puntuación ponderada
+	weightedScore := s.calculateWeightedScore(adjustedScores)
 
-	// Ajuste moderado para precios objetivo decrecientes, en lugar de invertir completamente
-	if s.TargetTo < s.TargetFrom {
-		// Reducir el puntaje pero no hacer que sea necesariamente negativo
-		// Esto permite que otros factores positivos (como una buena calificación)
-		// aún tengan influencia
-		weightedScore = weightedScore * 0.4
+	// 4. Aplicar modificadores basados en contexto
+	finalScore := s.applyContextModifiers(stock, weightedScore)
+
+	return finalScore
+}
+
+// calculateBaseScores calcula los componentes individuales del puntaje
+func (s *service) calculateBaseScores(stock domain.Stock) baseScoreComponents {
+	return baseScoreComponents{
+		percentDiff:   calculatePercentDiff(stock.TargetFrom, stock.TargetTo),
+		ratingScore:   calculateRatingScore(stock.RatingTo),
+		actionScore:   calculateActionScore(stock.Action),
+		absoluteBonus: calculateAbsoluteBonus(stock.TargetFrom, stock.TargetTo),
+	}
+}
+
+// applyExternalFactors aplica factores externos que pueden afectar los componentes del puntaje
+func (s *service) applyExternalFactors(stock domain.Stock, scores baseScoreComponents) baseScoreComponents {
+	// Copia los puntajes para no modificar los originales
+	adjusted := scores
+
+	// Solo aplicar factores si están disponibles en la configuración
+	if s.cfg.RecommendationFactors != nil {
+		// Aplicar factor de empresa si existe para este ticker
+		if factor, exists := s.cfg.RecommendationFactors.Companies[stock.Ticker]; exists {
+			adjusted.percentDiff = scores.percentDiff * (1 + (factor / 100))
+		}
+
+		// Aplicar factor de brokerage si existe para este brokerage
+		if factor, exists := s.cfg.RecommendationFactors.Brokerages[stock.Brokerage]; exists {
+			adjusted.ratingScore = scores.ratingScore * (1 + (factor / 100))
+		}
 	}
 
-	// Ajuste moderado para calificaciones negativas
-	if isNegativeRating(s.RatingTo) && weightedScore > 0 {
-		// Reducir el puntaje pero permitir que sea positivo en algunos casos
-		weightedScore = weightedScore * 0.6
+	return adjusted
+}
+
+// calculateWeightedScore calcula el puntaje ponderado basado en los componentes
+func (s *service) calculateWeightedScore(scores baseScoreComponents) float64 {
+	return (scores.percentDiff * percentDiffWeight) +
+		(scores.ratingScore * ratingWeight) +
+		(scores.actionScore * actionWeight) +
+		(scores.absoluteBonus * absoluteBonusWeight)
+}
+
+// applyContextModifiers ajusta la puntuación basado en el contexto específico del stock
+func (s *service) applyContextModifiers(stock domain.Stock, score float64) float64 {
+	adjustedScore := score
+
+	// Reducir puntuación si el precio objetivo está disminuyendo
+	if stock.TargetTo < stock.TargetFrom {
+		adjustedScore = adjustedScore * decreasingTargetFactor
 	}
 
-	return weightedScore
+	// Reducir puntuación para calificaciones negativas cuando el score es positivo
+	// Nota: Esto es necesario porque pueden existir casos donde otros factores
+	// compensan la calificación negativa, resultando en un score global positivo
+	if isNegativeRating(stock.RatingTo) && adjustedScore > 0 {
+		adjustedScore = adjustedScore * negativeRatingFactor
+	}
+
+	return adjustedScore
 }
 
 // isNegativeRating determina si una calificación es considerada negativa
+// Usado para aplicar ajustes adicionales a stocks con calificaciones negativas
 func isNegativeRating(rating string) bool {
 	normalizedRating := strings.ToLower(strings.TrimSpace(rating))
-
-	return normalizedRating == "underperform" ||
-		normalizedRating == "underweight" ||
-		normalizedRating == "reduce" ||
-		normalizedRating == "sell" ||
-		normalizedRating == "strong sell"
+	return negativeRatings[normalizedRating]
 }
 
 // calculatePercentDiff calcula la diferencia porcentual entre los precios objetivo
@@ -83,7 +190,6 @@ func calculatePercentDiff(from, to float64) float64 {
 }
 
 // calculateAbsoluteBonus calcula una bonificación basada en la magnitud absoluta y relativa del cambio
-// Esto refleja que un cambio de 100 a 200 es mejor que uno de 10 a 20, aunque porcentualmente sean iguales
 func calculateAbsoluteBonus(from, to float64) float64 {
 	diff := to - from
 
@@ -102,9 +208,6 @@ func calculateAbsoluteBonus(from, to float64) float64 {
 	// Para cambios negativos, usar una escala más equilibrada
 	if diff < 0 {
 		absDiff := -diff // Valor absoluto
-
-		// Considerar también el precio base para contextualizar el cambio
-		// Un cambio negativo grande en un stock caro es más significativo
 		relativeDiff := absDiff / from
 
 		if relativeDiff >= 0.20 && from >= 100 { // Caída del 20%+ en stocks de alto valor
@@ -119,7 +222,6 @@ func calculateAbsoluteBonus(from, to float64) float64 {
 	}
 
 	// Para cambios positivos, bonificar más los cambios grandes
-	// Considerando tanto el valor absoluto como el contexto del precio
 	if diff >= 100 {
 		return 25
 	} else if diff >= 50 {
@@ -145,74 +247,24 @@ func calculateAbsoluteBonus(from, to float64) float64 {
 func calculateRatingScore(rating string) float64 {
 	normalizedRating := strings.ToLower(strings.TrimSpace(rating))
 
-	// Escala balanceada de calificaciones
-	switch normalizedRating {
-	// Calificaciones muy positivas
-	case "strong-buy", "strong buy":
-		return 25
-	case "buy":
-		return 20
-	case "outperform":
-		return 18
-	case "overweight":
-		return 15
-
-	// Calificaciones positivas moderadas
-	case "accumulate", "add":
-		return 12
-	case "sector outperform":
-		return 10
-
-	// Calificaciones neutrales
-	case "market perform", "sector perform", "equal weight", "in-line":
-		return 5
-	case "hold", "neutral":
-		return 0
-
-	// Calificaciones negativas (valores menos extremos)
-	case "sector weight", "market weight":
-		return -5
-	case "underperform", "underweight":
-		return -10
-	case "reduce":
-		return -15
-	case "sell":
-		return -20
-	case "strong sell":
-		return -25
-
-	// Valor por defecto
-	default:
-		return 0 // Valor neutral por defecto
+	// Buscar en el mapa de puntuaciones
+	if score, exists := ratingScores[normalizedRating]; exists {
+		return score
 	}
+
+	return 0 // Valor neutral por defecto
 }
 
 // calculateActionScore evalúa el tipo de acción realizada por el analista
 func calculateActionScore(action string) float64 {
 	normalizedAction := strings.ToLower(strings.TrimSpace(action))
 
-	// Escala balanceada de acciones
-	if strings.Contains(normalizedAction, "upgraded by") {
-		return 15 // Mejora en la calificación
-	}
-	if strings.Contains(normalizedAction, "target raised by") {
-		return 12 // Aumento del precio objetivo
-	}
-	if strings.Contains(normalizedAction, "initiated by") {
-		return 8 // Nueva cobertura
-	}
-	if strings.Contains(normalizedAction, "reiterated by") {
-		return 5 // Reiteración
-	}
-	if strings.Contains(normalizedAction, "target set by") {
-		return 3 // Establecimiento de precio objetivo
-	}
-	if strings.Contains(normalizedAction, "target lowered by") {
-		return -10 // Reducción del precio objetivo (valor menos extremo)
-	}
-	if strings.Contains(normalizedAction, "downgraded by") {
-		return -12 // Degradación en la calificación (valor menos extremo)
+	// Buscar en patrones de acción
+	for pattern, score := range actionScorePatterns {
+		if strings.Contains(normalizedAction, pattern) {
+			return score
+		}
 	}
 
-	return 0
+	return 0 // Valor neutral por defecto
 }

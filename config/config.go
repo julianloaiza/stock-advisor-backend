@@ -1,27 +1,57 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/spf13/viper"
 )
 
+// RecommendationFactors contiene los factores de recomendación para empresas y brokerages
+type RecommendationFactors struct {
+	Companies  map[string]float64 `json:"companies"`
+	Brokerages map[string]float64 `json:"brokerages"`
+}
+
 // Config contiene la configuración de la aplicación.
 type Config struct {
-	Address            string
-	DatabaseURL        string
-	StockAPIURL        string
-	StockAPIKey        string
-	SyncMaxIterations  int
-	SyncTimeout        int
-	CORSAllowedOrigins string
+	Address               string
+	DatabaseURL           string
+	StockAPIURL           string
+	StockAPIKey           string
+	SyncMaxIterations     int
+	SyncTimeout           int
+	CORSAllowedOrigins    string
+	RecommendationFactors *RecommendationFactors
 }
 
 // New crea una nueva instancia de Config.
 func New() *Config {
 	// Configuración de Viper
+	setupViper()
+
+	// Crear configuración base
+	config := createBaseConfig()
+
+	// Cargar factores de recomendación (opcional)
+	loadRecommendationFactorsConfig(config)
+
+	// Validar configuración
+	if err := validateConfig(config); err != nil {
+		log.Fatalf("❌ Error en la configuración: %v", err)
+	}
+
+	// Mostrar configuración (sin datos sensibles)
+	logConfig(config)
+
+	return config
+}
+
+// setupViper configura Viper y carga el archivo .env
+func setupViper() {
 	viper.SetConfigFile(".env")
 	viper.AutomaticEnv()
 
@@ -37,9 +67,12 @@ func New() *Config {
 	viper.SetDefault("SYNC_MAX_ITERATIONS", 100)
 	viper.SetDefault("SYNC_TIMEOUT", 60)
 	viper.SetDefault("CORS_ALLOWED_ORIGINS", "*")
+	viper.SetDefault("RECOMMENDATION_FACTORS_PATH", "recommendation_factors.json")
+}
 
-	// Crear configuración
-	config := &Config{
+// createBaseConfig crea la configuración base de la aplicación
+func createBaseConfig() *Config {
+	return &Config{
 		Address:            viper.GetString("ADDRESS"),
 		DatabaseURL:        viper.GetString("DATABASE_URL"),
 		StockAPIURL:        viper.GetString("STOCK_API_URL"),
@@ -48,16 +81,41 @@ func New() *Config {
 		SyncTimeout:        viper.GetInt("SYNC_TIMEOUT"),
 		CORSAllowedOrigins: viper.GetString("CORS_ALLOWED_ORIGINS"),
 	}
+}
 
-	// Validar configuración
-	if err := validateConfig(config); err != nil {
-		log.Fatalf("❌ Error en la configuración: %v", err)
+// loadRecommendationFactorsConfig carga los factores de recomendación en la configuración
+func loadRecommendationFactorsConfig(config *Config) {
+	factorsPath := viper.GetString("RECOMMENDATION_FACTORS_PATH")
+	factors, err := loadRecommendationFactors(factorsPath)
+	if err != nil {
+		log.Printf("ℹ️ Factores de recomendación no disponibles: %v", err)
+	} else {
+		config.RecommendationFactors = factors
+		log.Printf("✅ Factores de recomendación cargados: %d compañías, %d brokerages",
+			len(factors.Companies), len(factors.Brokerages))
+	}
+}
+
+// loadRecommendationFactors carga los factores de recomendación desde un archivo JSON
+func loadRecommendationFactors(path string) (*RecommendationFactors, error) {
+	// Verificar si el archivo existe
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, fmt.Errorf("archivo no encontrado")
 	}
 
-	// Mostrar configuración (sin datos sensibles)
-	logConfig(config)
+	// Leer el archivo
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("error al leer el archivo: %w", err)
+	}
 
-	return config
+	// Decodificar JSON
+	var factors RecommendationFactors
+	if err := json.Unmarshal(data, &factors); err != nil {
+		return nil, fmt.Errorf("error al decodificar JSON: %w", err)
+	}
+
+	return &factors, nil
 }
 
 // validateConfig verifica que los valores críticos no estén vacíos.

@@ -1,0 +1,26 @@
+{
+    "companies": {
+        "FINV": 30.47,
+        "BABA": 29.66,
+        "TTWO": 29.51,
+        "CMMB": 28.84,
+        "SPB": 28.11,
+        "EC": 28.04,
+        "STIM": 27.53,
+        "YMM": 25.58,
+        "AKBA": 25.15,
+        "MESO": 24.93
+    },
+    "brokerages": {
+        "Piper Sandler": 24.54,
+        "Citigroup": 24.25,
+        "Barclays": 23.85,
+        "Oppenheimer": 23.52,
+        "Morgan Stanley": 22.98,
+        "HC Wainwright": 22.75,
+        "Needham & Company LLC": 22.45,
+        "Raymond James": 22.12,
+        "Truist Financial": 21.85,
+        "Jefferies Financial Group": 21.50
+    }
+}
