@@ -18,8 +18,7 @@ type Client interface {
 type client struct {
 	httpClient *http.Client
 	baseURL    string
-	apiKey     string
-	authHeader string
+	authToken  string
 }
 
 // New crea una nueva instancia de Cliente API basada en la configuración
@@ -28,8 +27,7 @@ func New(cfg *config.Config) Client {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second, // Timeout por defecto de 30 segundos
 		},
-		baseURL:    cfg.StockAPIURL,
-		apiKey:     cfg.StockAPIKey,
-		authHeader: "X-API-KEY", // Puedes hacerlo configurable si es necesario
+		baseURL:   cfg.StockAPIURL,
+		authToken: cfg.StockAuthTkn,
 	}
 }

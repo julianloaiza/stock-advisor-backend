@@ -37,10 +37,10 @@ func (m *MockAPIClient) Get(ctx context.Context, endpoint string, params map[str
 }
 
 // createMockConfig crea una configuración mock para las pruebas
-func createMockConfig(apiURL, apiKey string, maxIterations, timeout int) *config.Config {
+func createMockConfig(apiURL, authtkn string, maxIterations, timeout int) *config.Config {
 	return &config.Config{
 		StockAPIURL:        apiURL,
-		StockAPIKey:        apiKey,
+		StockAuthTkn:       authtkn,
 		SyncMaxIterations:  maxIterations,
 		SyncTimeout:        timeout,
 		Address:            ":8080",
@@ -76,7 +76,7 @@ func TestSyncStocks_Success(t *testing.T) {
 	mockAPIClient.On("Get", mock.Anything, mock.Anything, mock.Anything).Return(jsonResponse, nil)
 
 	// Crear configuración mock
-	mockCfg := createMockConfig("http://test-api.com", "test-api-key", 10, 30)
+	mockCfg := createMockConfig("http://test-api.com", "test-auth-tkn", 10, 30)
 
 	// Crear el servicio con el repositorio mock, configuración mock y cliente API mock
 	service := &service{
@@ -106,7 +106,7 @@ func TestSyncStocks_ExternalAPIError(t *testing.T) {
 	mockAPIClient.On("Get", mock.Anything, mock.Anything, mock.Anything).Return([]byte{}, errors.New("error de API externa"))
 
 	// Crear configuración mock
-	mockCfg := createMockConfig("http://test-api.com", "test-api-key", 10, 30)
+	mockCfg := createMockConfig("http://test-api.com", "test-auth-tkn", 10, 30)
 
 	// Crear el servicio con el repositorio mock, configuración mock y cliente API mock
 	service := &service{
@@ -153,7 +153,7 @@ func TestSyncStocks_RepositoryError(t *testing.T) {
 	mockAPIClient.On("Get", mock.Anything, mock.Anything, mock.Anything).Return(jsonResponse, nil)
 
 	// Crear configuración mock
-	mockCfg := createMockConfig("http://test-api.com", "test-api-key", 10, 30)
+	mockCfg := createMockConfig("http://test-api.com", "test-auth-tkn", 10, 30)
 
 	// Crear el servicio con el repositorio mock, configuración mock y cliente API mock
 	service := &service{

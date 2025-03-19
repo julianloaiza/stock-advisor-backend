@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 )
@@ -49,8 +50,9 @@ func (c *client) buildURL(path string, params map[string]string) string {
 
 // addHeaders añade los headers de autenticación y otros comunes
 func (c *client) addHeaders(req *http.Request) {
-	if c.apiKey != "" {
-		req.Header.Set(c.authHeader, c.apiKey)
+	if c.authToken != "" {
+		// JWT token con formato Bearer
+		req.Header.Set("Authorization", "Bearer "+c.authToken)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
@@ -58,6 +60,9 @@ func (c *client) addHeaders(req *http.Request) {
 
 // executeRequest ejecuta la solicitud HTTP y maneja la respuesta
 func (c *client) executeRequest(req *http.Request) ([]byte, error) {
+
+	log.Printf("API request: método=%s", req.Method)
+
 	// Ejecutar solicitud
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -68,9 +73,12 @@ func (c *client) executeRequest(req *http.Request) ([]byte, error) {
 	// Verificar código de respuesta
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		bodyBytes, _ := io.ReadAll(resp.Body)
+		log.Printf("API error: status=%d", resp.StatusCode)
 		return nil, fmt.Errorf("status code inesperado: %d, respuesta: %s",
 			resp.StatusCode, string(bodyBytes))
 	}
+
+	log.Printf("API success: status=%d", resp.StatusCode)
 
 	// Leer la respuesta
 	return io.ReadAll(resp.Body)

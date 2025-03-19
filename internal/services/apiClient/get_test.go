@@ -17,7 +17,7 @@ func TestGet_SuccessResponse(t *testing.T) {
 		assert.Equal(t, http.MethodGet, r.Method)
 
 		// Verificar headers
-		assert.Equal(t, "test-api-key", r.Header.Get("X-API-KEY"))
+		assert.Equal(t, "test-auth-tkn", r.Header.Get("X-AUTH-TKN"))
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
 		// Verificar parámetros de consulta
@@ -33,16 +33,15 @@ func TestGet_SuccessResponse(t *testing.T) {
 
 	// Crear config con la URL del servidor de prueba
 	cfg := &config.Config{
-		StockAPIURL: server.URL,
-		StockAPIKey: "test-api-key",
+		StockAPIURL:  server.URL,
+		StockAuthTkn: "test-auth-tkn",
 	}
 
 	// Crear cliente API
 	client := &client{
 		httpClient: server.Client(),
 		baseURL:    cfg.StockAPIURL,
-		apiKey:     cfg.StockAPIKey,
-		authHeader: "X-API-KEY",
+		authToken:  cfg.StockAuthTkn,
 	}
 
 	// Ejecutar solicitud GET con parámetros
@@ -69,16 +68,15 @@ func TestGet_ErrorResponse(t *testing.T) {
 
 	// Crear config con la URL del servidor de prueba
 	cfg := &config.Config{
-		StockAPIURL: server.URL,
-		StockAPIKey: "test-api-key",
+		StockAPIURL:  server.URL,
+		StockAuthTkn: "test-auth-tkn",
 	}
 
 	// Crear cliente API
 	client := &client{
 		httpClient: server.Client(),
 		baseURL:    cfg.StockAPIURL,
-		apiKey:     cfg.StockAPIKey,
-		authHeader: "X-API-KEY",
+		authToken:  cfg.StockAuthTkn,
 	}
 
 	// Ejecutar solicitud GET
@@ -119,8 +117,7 @@ func TestBuildURL_WithParams(t *testing.T) {
 func TestAddHeaders(t *testing.T) {
 	// Crear cliente API con API key
 	apiClient := &client{
-		apiKey:     "test-api-key",
-		authHeader: "X-API-KEY",
+		authToken: "test-auth-tkn",
 	}
 
 	// Crear request
@@ -130,19 +127,18 @@ func TestAddHeaders(t *testing.T) {
 	apiClient.addHeaders(req)
 
 	// Verificar headers
-	assert.Equal(t, "test-api-key", req.Header.Get("X-API-KEY"))
+	assert.Equal(t, "test-auth-tkn", req.Header.Get("X-AUTH-TKN"))
 	assert.Equal(t, "application/json", req.Header.Get("Content-Type"))
 	assert.Equal(t, "application/json", req.Header.Get("Accept"))
 
 	// Probar sin API key
 	apiClientNoKey := &client{
-		apiKey:     "",
-		authHeader: "X-API-KEY",
+		authToken: "",
 	}
 
 	req2, _ := http.NewRequest(http.MethodGet, "https://api.example.com", nil)
 	apiClientNoKey.addHeaders(req2)
 
 	// Verificar que no se agregó el header de autenticación
-	assert.Equal(t, "", req2.Header.Get("X-API-KEY"))
+	assert.Equal(t, "", req2.Header.Get("X-AUTH-TKN"))
 }
