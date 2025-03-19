@@ -60,7 +60,7 @@ swag init
 Configure the following in `.env`:
 - `DATABASE_URL`: PostgreSQL connection string
 - `STOCK_API_URL`: External stock data API URL
-- `STOCK_API_KEY`: API authentication key
+- `STOCK_AUTH_TKN`: API authentication key
 - `SYNC_MAX_ITERATIONS`: Maximum sync iterations
 - `SYNC_TIMEOUT`: Sync operation timeout
 - `CORS_ALLOWED_ORIGINS`: Allowed CORS origins

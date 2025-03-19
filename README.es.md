@@ -60,7 +60,7 @@ swag init
 Configurar lo siguiente en `.env`:
 - `DATABASE_URL`: Cadena de conexión a PostgreSQL
 - `STOCK_API_URL`: URL de la API externa de datos de acciones
-- `STOCK_API_KEY`: Clave de autenticación de la API
+- `STOCK_AUTH_TKN`: Clave de autenticación de la API
 - `SYNC_MAX_ITERATIONS`: Máximo de iteraciones de sincronización
 - `SYNC_TIMEOUT`: Tiempo de espera de la operación de sincronización
 - `CORS_ALLOWED_ORIGINS`: Orígenes permitidos para CORS

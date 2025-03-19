@@ -76,7 +76,7 @@ func createBaseConfig() *Config {
 		Address:            viper.GetString("ADDRESS"),
 		DatabaseURL:        viper.GetString("DATABASE_URL"),
 		StockAPIURL:        viper.GetString("STOCK_API_URL"),
-		StockAuthTkn:       viper.GetString("STOCK_API_KEY"),
+		StockAuthTkn:       viper.GetString("STOCK_AUTH_TKN"),
 		SyncMaxIterations:  viper.GetInt("SYNC_MAX_ITERATIONS"),
 		SyncTimeout:        viper.GetInt("SYNC_TIMEOUT"),
 		CORSAllowedOrigins: viper.GetString("CORS_ALLOWED_ORIGINS"),
@@ -127,7 +127,7 @@ func validateConfig(cfg *Config) error {
 		return errors.New("STOCK_API_URL no puede estar vacío")
 	}
 	if cfg.StockAuthTkn == "" {
-		return errors.New("STOCK_API_KEY no puede estar vacío")
+		return errors.New("STOCK_AUTH_TKN no puede estar vacío")
 	}
 	if cfg.SyncTimeout <= 0 {
 		return errors.New("SYNC_TIMEOUT debe ser mayor que 0")
