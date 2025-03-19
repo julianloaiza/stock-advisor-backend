@@ -19,7 +19,23 @@ type StockParams struct {
 	Currency    string
 }
 
-// GetStocks obtiene la lista de stocks aplicando búsqueda y paginación.
+// GetStocks
+// @Summary Obtener lista de stocks
+// @Description Recupera una lista filtrada y paginada de acciones bursátiles
+// @Tags stocks
+// @Accept json
+// @Produce json
+// @Param query query string false "Texto de búsqueda general (ticker, company, brokerage, etc.)"
+// @Param page query int false "Número de página (por defecto: 1)" default(1)
+// @Param size query int false "Registros por página (por defecto: 10)" default(10)
+// @Param recommends query bool false "Ordenar por puntaje de recomendación"
+// @Param minTargetTo query number false "Valor mínimo del precio objetivo"
+// @Param maxTargetTo query number false "Valor máximo del precio objetivo"
+// @Param currency query string false "Moneda de los precios (por defecto: USD)" default(USD)
+// @Success 200 {object} response.APIResponse{data=response.PaginatedData} "Consulta de acciones exitosa"
+// @Failure 400 {object} response.APIResponse "Parámetros inválidos"
+// @Failure 500 {object} response.APIResponse "Error interno del servidor"
+// @Router /stocks [get]
 func (h *handler) GetStocks(c echo.Context) error {
 	params, err := parseStockParams(c)
 	if err != nil {

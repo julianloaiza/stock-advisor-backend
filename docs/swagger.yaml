@@ -1,0 +1,143 @@
+basePath: /
+definitions:
+  response.APIResponse:
+    properties:
+      code:
+        description: Código HTTP
+        type: integer
+      data:
+        description: Datos de respuesta
+      error:
+        description: Detalles del error
+        type: string
+      message:
+        description: Mensaje descriptivo
+        type: string
+    type: object
+  response.PaginatedData:
+    properties:
+      content:
+        description: Lista de ítems
+      page:
+        description: Número de página actual
+        type: integer
+      size:
+        description: Ítems por página
+        type: integer
+      total:
+        description: Total de ítems disponibles
+        type: integer
+    type: object
+  stocks.SyncRequest:
+    properties:
+      limit:
+        description: Número de iteraciones para la sincronización
+        example: 5
+        minimum: 1
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: soporte@ejemplo.com
+    name: API Support
+  description: API para gestionar y consultar datos de acciones bursátiles
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Stock Advisor API
+  version: "1.0"
+paths:
+  /stocks:
+    get:
+      consumes:
+      - application/json
+      description: Recupera una lista filtrada y paginada de acciones bursátiles
+      parameters:
+      - description: Texto de búsqueda general (ticker, company, brokerage, etc.)
+        in: query
+        name: query
+        type: string
+      - default: 1
+        description: 'Número de página (por defecto: 1)'
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 'Registros por página (por defecto: 10)'
+        in: query
+        name: size
+        type: integer
+      - description: Ordenar por puntaje de recomendación
+        in: query
+        name: recommends
+        type: boolean
+      - description: Valor mínimo del precio objetivo
+        in: query
+        name: minTargetTo
+        type: number
+      - description: Valor máximo del precio objetivo
+        in: query
+        name: maxTargetTo
+        type: number
+      - default: USD
+        description: 'Moneda de los precios (por defecto: USD)'
+        in: query
+        name: currency
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Consulta de acciones exitosa
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/response.PaginatedData'
+              type: object
+        "400":
+          description: Parámetros inválidos
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Error interno del servidor
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Obtener lista de stocks
+      tags:
+      - stocks
+  /stocks/sync:
+    post:
+      consumes:
+      - application/json
+      description: Actualiza la base de datos con información de acciones desde un
+        servicio externo
+      parameters:
+      - description: Parámetros de sincronización
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/stocks.SyncRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Sincronización exitosa
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "400":
+          description: Error en la solicitud
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Error del servidor
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Sincronizar stocks desde fuente externa
+      tags:
+      - stocks
+swagger: "2.0"

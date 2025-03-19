@@ -8,13 +8,24 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// SyncStocks sincroniza la base de datos con la API externa.
-// Se espera recibir el parámetro "limit" en el body de la petición POST.
+// SyncRequest estructura para la solicitud de sincronización
+type SyncRequest struct {
+	Limit int `json:"limit" example:"5" minimum:"1"` // Número de iteraciones para la sincronización
+}
+
+// @Summary Sincronizar stocks desde fuente externa
+// @Description Actualiza la base de datos con información de acciones desde un servicio externo
+// @Tags stocks
+// @Accept json
+// @Produce json
+// @Param request body SyncRequest true "Parámetros de sincronización"
+// @Success 200 {object} response.APIResponse "Sincronización exitosa"
+// @Failure 400 {object} response.APIResponse "Error en la solicitud"
+// @Failure 500 {object} response.APIResponse "Error del servidor"
+// @Router /stocks/sync [post]
 func (h *handler) SyncStocks(c echo.Context) error {
-	// Usar un struct anónimo para bindear el body
-	var req struct {
-		Limit int `json:"limit"`
-	}
+	// Usar un struct para bindear el body
+	var req SyncRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, response.NewError(
 			http.StatusBadRequest,

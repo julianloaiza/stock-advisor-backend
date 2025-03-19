@@ -1,3 +1,13 @@
+// @title Stock Advisor API
+// @version 1.0
+// @description API para gestionar y consultar datos de acciones bursátiles
+// @termsOfService http://swagger.io/terms/
+// @contact.name API Support
+// @contact.email soporte@ejemplo.com
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+// @host localhost:8080
+// @BasePath /
 package main
 
 import (
@@ -7,12 +17,14 @@ import (
 
 	"github.com/julianloaiza/stock-advisor/config"
 	"github.com/julianloaiza/stock-advisor/database"
+	_ "github.com/julianloaiza/stock-advisor/docs"
 	"github.com/julianloaiza/stock-advisor/internal/httpapi"
 	"github.com/julianloaiza/stock-advisor/internal/httpapi/handlers"
 	"github.com/julianloaiza/stock-advisor/internal/httpapi/middleware"
 	"github.com/julianloaiza/stock-advisor/internal/repositories"
 	"github.com/julianloaiza/stock-advisor/internal/services"
 	"github.com/labstack/echo/v4"
+	echoSwagger "github.com/swaggo/echo-swagger"
 	"go.uber.org/fx"
 	"gorm.io/gorm"
 )
@@ -52,6 +64,9 @@ func setLifeCycle(p Params) {
 		OnStart: func(ctx context.Context) error {
 			// Aplicar CORS con configuración del middleware
 			middleware.ApplyCORS(p.Echo, p.Config)
+
+			// Agregar ruta para Swagger
+			p.Echo.GET("/swagger/*", echoSwagger.WrapHandler)
 
 			// Registrar rutas de los handlers
 			for _, h := range p.Handlers {
