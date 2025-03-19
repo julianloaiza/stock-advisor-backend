@@ -2,6 +2,8 @@
 
 Stock Advisor Backend is a robust Go-based API for managing and querying stock market data, designed with clean architecture and hexagonal architecture principles.
 
+![Swagger](capture.png)
+
 ## Features
 
 - **RESTful API** for stock market data retrieval
@@ -147,3 +149,94 @@ Access Swagger documentation at:
 - `GET /stocks`: Retrieve stocks with advanced filtering
 - `POST /stocks/sync`: Synchronize stocks from external source
 - `GET /swagger/*`: Swagger documentation
+
+### GET /stocks Endpoint
+
+#### Input Parameters (Query Params)
+- `query` (optional): General search text
+  - Searches in: ticker, company, brokerage, action, ratings
+- `page` (optional): Page number 
+  - Default value: 1
+- `size` (optional): Number of records per page
+  - Default value: 10
+- `recommends` (optional): Order by recommendation score
+  - Values: `true` or `false`
+  - Default value: `false`
+- `minTargetTo` (optional): Minimum target price
+- `maxTargetTo` (optional): Maximum target price
+- `currency` (optional): Price currency
+  - Default value: "USD"
+
+#### Example Request
+```
+GET /stocks?query=AAPL&page=1&size=10&recommends=true&minTargetTo=150&maxTargetTo=200&currency=USD
+```
+
+#### Successful Response (200 OK)
+```json
+{
+  "code": 200,
+  "data": {
+    "content": [
+      {
+        "id": 1054506709730689025,
+        "ticker": "AAPL",
+        "company": "Apple Inc.",
+        "brokerage": "Goldman Sachs",
+        "action": "upgraded by",
+        "rating_from": "Hold",
+        "rating_to": "Buy", 
+        "target_from": 150,
+        "target_to": 180,
+        "currency": "USD",
+        "time": "2025-02-26T19:30:06.366255-05:00"
+      }
+    ],
+    "total": 1000,
+    "page": 1,
+    "size": 10
+  },
+  "message": "Stock query successful"
+}
+```
+
+### POST /stocks/sync Endpoint
+
+#### Input Parameters
+```json
+{
+  "limit": 5  // Number of sync iterations
+}
+```
+
+#### Constraints
+- `limit` must be a positive integer
+- Default value: 1
+- Maximum configurable in server settings (default: 100)
+
+#### Example Request
+```json
+{
+  "limit": 5
+}
+```
+
+#### Successful Response (200 OK)
+```json
+{
+  "code": 200,
+  "message": "Synchronization completed successfully"
+}
+```
+
+#### Possible Errors
+- 400 Bad Request: 
+  - Invalid limit
+  - Error reading request body
+- 500 Internal Server Error: 
+  - Error during synchronization with external API
+
+#### Important Notes
+- Each iteration updates approximately 10 stock records
+- Synchronization COMPLETELY replaces existing data
+- The operation cannot be undone once completed

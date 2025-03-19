@@ -2,6 +2,8 @@
 
 Stock Advisor Backend es una API robusta desarrollada en Go para gestionar y consultar datos del mercado de valores, diseñada con principios de arquitectura limpia y arquitectura hexagonal.
 
+![Swagger](capture.png)
+
 ## Características
 
 - **API RESTful** para recuperación de datos de acciones
@@ -147,3 +149,94 @@ Acceder a la documentación Swagger en:
 - `GET /stocks`: Recuperar stocks con filtrado avanzado
 - `POST /stocks/sync`: Sincronizar stocks desde fuente externa
 - `GET /swagger/*`: Documentación Swagger
+
+### Endpoint GET /stocks
+
+#### Parámetros de Entrada (Parámetros de Consulta)
+- `query` (opcional): Texto de búsqueda general
+  - Busca en: ticker, compañía, casa de bolsa, acción, calificaciones
+- `page` (opcional): Número de página 
+  - Valor por defecto: 1
+- `size` (opcional): Número de registros por página
+  - Valor por defecto: 10
+- `recommends` (opcional): Ordenar por puntuación de recomendación
+  - Valores: `true` o `false`
+  - Valor por defecto: `false`
+- `minTargetTo` (opcional): Precio objetivo mínimo
+- `maxTargetTo` (opcional): Precio objetivo máximo
+- `currency` (opcional): Moneda de los precios
+  - Valor por defecto: "USD"
+
+#### Ejemplo de Solicitud
+```
+GET /stocks?query=AAPL&page=1&size=10&recommends=true&minTargetTo=150&maxTargetTo=200&currency=USD
+```
+
+#### Respuesta Exitosa (200 OK)
+```json
+{
+  "code": 200,
+  "data": {
+    "content": [
+      {
+        "id": 1054506709730689025,
+        "ticker": "AAPL",
+        "company": "Apple Inc.",
+        "brokerage": "Goldman Sachs",
+        "action": "actualizado por",
+        "rating_from": "Mantener",
+        "rating_to": "Comprar", 
+        "target_from": 150,
+        "target_to": 180,
+        "currency": "USD",
+        "time": "2025-02-26T19:30:06.366255-05:00"
+      }
+    ],
+    "total": 1000,
+    "page": 1,
+    "size": 10
+  },
+  "message": "Consulta de acciones exitosa"
+}
+```
+
+### Endpoint POST /stocks/sync
+
+#### Parámetros de Entrada
+```json
+{
+  "limit": 5  // Número de iteraciones de sincronización
+}
+```
+
+#### Restricciones
+- `limit` debe ser un número entero positivo
+- Valor por defecto: 1
+- Máximo configurable en la configuración del servidor (por defecto: 100)
+
+#### Ejemplo de Solicitud
+```json
+{
+  "limit": 5
+}
+```
+
+#### Respuesta Exitosa (200 OK)
+```json
+{
+  "code": 200,
+  "message": "Sincronización completada exitosamente"
+}
+```
+
+#### Posibles Errores
+- 400 Bad Request: 
+  - Límite inválido
+  - Error al leer el cuerpo de la solicitud
+- 500 Internal Server Error: 
+  - Error durante la sincronización con la API externa
+
+#### Notas Importantes
+- Cada iteración actualiza aproximadamente 10 registros de acciones
+- La sincronización REEMPLAZA COMPLETAMENTE los datos existentes
+- La operación no se puede deshacer una vez completada
