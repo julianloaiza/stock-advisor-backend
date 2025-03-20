@@ -9,7 +9,7 @@ Stock Advisor Backend is a robust Go-based API for managing and querying stock m
 - **RESTful API** for stock market data retrieval
 - **Advanced Filtering**: Search and filter stocks by multiple criteria
 - **Intelligent Recommendation Algorithm**: Score stocks based on target prices and ratings
-- **Data Synchronization**: Sync stocks from external data sources
+- **Data Synchronization**: Efficient sync with external data sources
 - **Database Agnostic**: Designed with GORM for flexible database support
 - **Comprehensive Swagger Documentation**
 - **Dependency Injection** using Uber FX
@@ -20,7 +20,7 @@ Stock Advisor Backend is a robust Go-based API for managing and querying stock m
 - **Go 1.23+**
 - **Echo Framework**
 - **GORM**
-- **PostgreSQL**
+- **PostgreSQL/CockroachDB**
 - **Uber FX**
 - **Swagger**
 - **Testify**
@@ -28,7 +28,7 @@ Stock Advisor Backend is a robust Go-based API for managing and querying stock m
 ## Requirements
 
 - Go 1.23 or higher
-- PostgreSQL
+- PostgreSQL or CockroachDB
 - External Stock Data API (configured in `.env`)
 
 ## Installation
@@ -58,12 +58,14 @@ swag init
 ## Configuration
 
 Configure the following in `.env`:
-- `DATABASE_URL`: PostgreSQL connection string
+- `DATABASE_URL`: Database connection string
 - `STOCK_API_URL`: External stock data API URL
-- `STOCK_AUTH_TKN`: API authentication key
+- `STOCK_AUTH_TKN`: Authentication token for external API
 - `SYNC_MAX_ITERATIONS`: Maximum sync iterations
 - `SYNC_TIMEOUT`: Sync operation timeout
 - `CORS_ALLOWED_ORIGINS`: Allowed CORS origins
+
+You can also configure the recommendation algorithm using the `recommendation_factors.json` file.
 
 ## Running the Application
 
@@ -97,9 +99,6 @@ Access Swagger documentation at:
     ├── 📁database             # Database connection setup
         └── database.go        # Establishes and manages database connection
     ├── 📁docs                 # Swagger documentation
-        ├── docs.go            # Generated Swagger documentation
-        ├── swagger.json       # Swagger JSON specification
-        └── swagger.yaml       # Swagger YAML specification
     ├── 📁internal             # Core application logic
         ├── 📁domain           # Domain models and core entities
             └── stock.go       # Stock entity definition
@@ -110,10 +109,8 @@ Access Swagger documentation at:
                     └── response.go     # Standard API response structures
                 └── 📁stocks            # Stock-specific handlers
                     ├── get.go          # GET stocks handler
-                    ├── get_test.go     # Tests for GET stocks handler
-                    ├── stocks.go       # Configuration and construction of stocks handlers module
-                    ├── sync.go         # Stock synchronization handler
-                    └── sync_test.go    # Tests for sync handler
+                    ├── stocks.go       # Handler module configuration
+                    └── sync.go         # Stock synchronization handler
             ├── httpapi.go             # HTTP API module configuration
             └── 📁middleware           # HTTP middleware
                 └── cors.go            # CORS configuration
@@ -121,26 +118,24 @@ Access Swagger documentation at:
             ├── repositories.go        # Repository module configuration
             └── 📁stocks       # Stock-specific repositories
                 ├── get.go             # Stock retrieval repository methods
-                ├── get_test.go        # Tests for stock retrieval
-                ├── stocks.go          # Configuration and construction of stocks repositories module
-                ├── sync.go            # Stock synchronization repository methods
-                └── sync_test.go       # Tests for sync repository methods
+                ├── stocks.go          # Repository module configuration
+                └── sync.go            # Stock synchronization repository methods
         └── 📁services         # Business logic layer
+            ├── 📁apiClient    # Client for external API communication
+                ├── apiClient.go       # Client definitions and initialization
+                └── get.go             # GET request implementation
             ├── services.go            # Services module configuration
             └── 📁stocks       # Stock-specific services
                 ├── get.go             # Stock retrieval service logic
-                ├── get_test.go        # Tests for stock retrieval service
-                ├── recommendation.go  # Stock recommendation algorithm
-                ├── recommendation_test.go # Tests for recommendation algorithm
-                ├── stocks.go          # Configuration and construction of stocks services module
-                ├── sync.go            # Stock synchronization service logic
-                └── sync_test.go       # Tests for sync service
+                ├── stocks.go          # Service module configuration
+                ├── sync_parser.go     # Data transformation during synchronization
+                ├── sync_recommendation.go # Recommendation scoring algorithm
+                └── sync.go            # Stock synchronization service logic
+    ├── recommendation_factors.json    # Recommendation algorithm configuration
     ├── .env                   # Environment configuration (local)
     ├── .env.example           # Example environment configuration
-    ├── .gitignore             # Git ignore file
     ├── Dockerfile             # Docker container configuration
     ├── go.mod                 # Go module dependencies
-    ├── go.sum                 # Exact dependency versions
     └── main.go                # Application entry point
 ```
 
@@ -189,7 +184,7 @@ GET /stocks?query=AAPL&page=1&size=10&recommends=true&minTargetTo=150&maxTargetT
         "target_from": 150,
         "target_to": 180,
         "currency": "USD",
-        "time": "2025-02-26T19:30:06.366255-05:00"
+        "recommend_score": 36.125
       }
     ],
     "total": 1000,
@@ -199,6 +194,17 @@ GET /stocks?query=AAPL&page=1&size=10&recommends=true&minTargetTo=150&maxTargetT
   "message": "Stock query successful"
 }
 ```
+
+### Recommendation Algorithm
+
+The system calculates a `recommend_score` for each stock based on multiple factors:
+
+1. **Percentage difference between target prices**: Higher increases receive higher scores
+2. **Analyst ratings**: Upgrades to "Buy" and "Strong-Buy" are prioritized
+3. **Action type**: Different scores are assigned to actions like "upgraded by", "target raised by", etc.
+4. **Company and brokerage factors**: Configurable from `recommendation_factors.json`
+
+This score allows sorting results when using the `recommends=true` parameter.
 
 ### POST /stocks/sync Endpoint
 
@@ -240,3 +246,21 @@ GET /stocks?query=AAPL&page=1&size=10&recommends=true&minTargetTo=150&maxTargetT
 - Each iteration updates approximately 10 stock records
 - Synchronization COMPLETELY replaces existing data
 - The operation cannot be undone once completed
+- During synchronization, recommendation scores are calculated and stored in the database
+
+## Data Flow
+
+### Stock Query Flow
+1. HTTP request arrives at the `GetStocks` handler
+2. Handler validates and processes parameters
+3. Stock service applies business logic
+4. Repository performs database query
+5. Results are transformed and returned to the client
+
+### Synchronization Flow
+1. HTTP request arrives at the `SyncStocks` handler
+2. Stock service coordinates synchronization
+3. API client fetches data from external source
+4. Parser transforms data to internal format
+5. Recommendation algorithm calculates scores
+6. Repository replaces all data in the database

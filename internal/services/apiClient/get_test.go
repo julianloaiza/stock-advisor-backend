@@ -17,8 +17,9 @@ func TestGet_SuccessResponse(t *testing.T) {
 		assert.Equal(t, http.MethodGet, r.Method)
 
 		// Verificar headers
-		assert.Equal(t, "test-auth-tkn", r.Header.Get("X-AUTH-TKN"))
+		assert.Equal(t, "Bearer test-auth-tkn", r.Header.Get("Authorization"))
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		assert.Equal(t, "application/json", r.Header.Get("Accept"))
 
 		// Verificar parámetros de consulta
 		assert.Equal(t, "value1", r.URL.Query().Get("param1"))
@@ -115,7 +116,7 @@ func TestBuildURL_WithParams(t *testing.T) {
 }
 
 func TestAddHeaders(t *testing.T) {
-	// Crear cliente API con API key
+	// Crear cliente API con token de autenticación
 	apiClient := &client{
 		authToken: "test-auth-tkn",
 	}
@@ -127,18 +128,50 @@ func TestAddHeaders(t *testing.T) {
 	apiClient.addHeaders(req)
 
 	// Verificar headers
-	assert.Equal(t, "test-auth-tkn", req.Header.Get("X-AUTH-TKN"))
+	assert.Equal(t, "Bearer test-auth-tkn", req.Header.Get("Authorization"))
 	assert.Equal(t, "application/json", req.Header.Get("Content-Type"))
 	assert.Equal(t, "application/json", req.Header.Get("Accept"))
 
-	// Probar sin API key
-	apiClientNoKey := &client{
+	// Probar sin token de autenticación
+	apiClientNoToken := &client{
 		authToken: "",
 	}
 
 	req2, _ := http.NewRequest(http.MethodGet, "https://api.example.com", nil)
-	apiClientNoKey.addHeaders(req2)
+	apiClientNoToken.addHeaders(req2)
 
 	// Verificar que no se agregó el header de autenticación
-	assert.Equal(t, "", req2.Header.Get("X-AUTH-TKN"))
+	assert.Equal(t, "", req2.Header.Get("Authorization"))
+	// Otros headers deben estar presentes
+	assert.Equal(t, "application/json", req2.Header.Get("Content-Type"))
+	assert.Equal(t, "application/json", req2.Header.Get("Accept"))
+}
+
+func TestGet_WithPathAndNoParams(t *testing.T) {
+	// Crear un servidor de prueba que verifica la ruta
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verificar que la ruta contiene el path
+		assert.Equal(t, "/custom-path", r.URL.Path)
+		// Verificar que no hay parámetros de consulta
+		assert.Empty(t, r.URL.RawQuery)
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"success":true}`))
+	}))
+	defer server.Close()
+
+	// Crear cliente API
+	client := &client{
+		httpClient: server.Client(),
+		baseURL:    server.URL,
+		authToken:  "test-auth-tkn",
+	}
+
+	// Ejecutar solicitud GET con path pero sin parámetros
+	response, err := client.Get(context.Background(), "custom-path", nil)
+
+	// Verificar resultados
+	assert.NoError(t, err)
+	assert.NotNil(t, response)
+	assert.Contains(t, string(response), `"success":true`)
 }

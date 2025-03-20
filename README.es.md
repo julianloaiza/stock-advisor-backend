@@ -9,7 +9,7 @@ Stock Advisor Backend es una API robusta desarrollada en Go para gestionar y con
 - **API RESTful** para recuperación de datos de acciones
 - **Filtrado Avanzado**: Búsqueda y filtrado de acciones por múltiples criterios
 - **Algoritmo de Recomendación Inteligente**: Puntuación de acciones basada en precios objetivo y calificaciones
-- **Sincronización de Datos**: Sincronización de acciones desde fuentes de datos externas
+- **Sincronización de Datos**: Sincronización eficiente con fuentes de datos externas
 - **Base de Datos Agnóstica**: Diseñada con GORM para soporte de bases de datos flexible
 - **Documentación Swagger Completa**
 - **Inyección de Dependencias** usando Uber FX
@@ -20,7 +20,7 @@ Stock Advisor Backend es una API robusta desarrollada en Go para gestionar y con
 - **Go 1.23+**
 - **Framework Echo**
 - **GORM**
-- **PostgreSQL**
+- **PostgreSQL/CockroachDB**
 - **Uber FX**
 - **Swagger**
 - **Testify**
@@ -28,7 +28,7 @@ Stock Advisor Backend es una API robusta desarrollada en Go para gestionar y con
 ## Requisitos
 
 - Go 1.23 o superior
-- PostgreSQL
+- PostgreSQL o CockroachDB
 - API externa de datos de acciones (configurada en `.env`)
 
 ## Instalación
@@ -58,12 +58,14 @@ swag init
 ## Configuración
 
 Configurar lo siguiente en `.env`:
-- `DATABASE_URL`: Cadena de conexión a PostgreSQL
+- `DATABASE_URL`: Cadena de conexión a la base de datos
 - `STOCK_API_URL`: URL de la API externa de datos de acciones
-- `STOCK_AUTH_TKN`: Clave de autenticación de la API
+- `STOCK_AUTH_TKN`: Token de autenticación para la API externa 
 - `SYNC_MAX_ITERATIONS`: Máximo de iteraciones de sincronización
 - `SYNC_TIMEOUT`: Tiempo de espera de la operación de sincronización
 - `CORS_ALLOWED_ORIGINS`: Orígenes permitidos para CORS
+
+También puedes configurar el algoritmo de recomendación mediante el archivo `recommendation_factors.json`.
 
 ## Ejecutando la Aplicación
 
@@ -97,9 +99,6 @@ Acceder a la documentación Swagger en:
     ├── 📁database             # Configuración de conexión a base de datos
         └── database.go        # Establece y gestiona la conexión a base de datos
     ├── 📁docs                 # Documentación Swagger
-        ├── docs.go            # Documentación Swagger generada
-        ├── swagger.json       # Especificación Swagger en JSON
-        └── swagger.yaml       # Especificación Swagger en YAML
     ├── 📁internal             # Lógica central de la aplicación
         ├── 📁domain           # Modelos de dominio y entidades centrales
             └── stock.go       # Definición de entidad Stock
@@ -110,10 +109,8 @@ Acceder a la documentación Swagger en:
                     └── response.go     # Estructuras de respuesta API estándar
                 └── 📁stocks            # Manejadores específicos de stocks
                     ├── get.go          # Manejador GET de stocks
-                    ├── get_test.go     # Pruebas para manejador GET
-                    ├── stocks.go       # Configuración y construcción del módulo de manejadores de stocks
-                    ├── sync.go         # Manejador de sincronización de stocks
-                    └── sync_test.go    # Pruebas para manejador de sincronización
+                    ├── stocks.go       # Configuración del módulo de manejadores
+                    └── sync.go         # Manejador de sincronización de stocks
             ├── httpapi.go             # Configuración del módulo de API HTTP
             └── 📁middleware           # Middleware HTTP
                 └── cors.go            # Configuración de CORS
@@ -121,26 +118,24 @@ Acceder a la documentación Swagger en:
             ├── repositories.go        # Configuración del módulo de repositorios
             └── 📁stocks       # Repositorios específicos de stocks
                 ├── get.go             # Métodos de recuperación de stocks
-                ├── get_test.go        # Pruebas de recuperación de stocks
-                ├── stocks.go          # Configuración y construcción del módulo de repositorios de stocks
-                ├── sync.go            # Métodos de sincronización de stocks
-                └── sync_test.go       # Pruebas de métodos de sincronización
+                ├── stocks.go          # Configuración del módulo de repositorios
+                └── sync.go            # Métodos de sincronización de stocks
         └── 📁services         # Capa de lógica de negocio
+            ├── 📁apiClient    # Cliente para comunicación con APIs externas
+                ├── apiClient.go       # Definiciones e inicialización del cliente
+                └── get.go             # Implementación de peticiones GET
             ├── services.go            # Configuración del módulo de servicios
             └── 📁stocks       # Servicios específicos de stocks
                 ├── get.go             # Lógica de recuperación de stocks
-                ├── get_test.go        # Pruebas de servicio de recuperación
-                ├── recommendation.go  # Algoritmo de recomendación de stocks
-                ├── recommendation_test.go # Pruebas del algoritmo de recomendación
-                ├── stocks.go          # Configuración y construcción del módulo de servicios de stocks
-                ├── sync.go            # Lógica de sincronización de stocks
-                └── sync_test.go       # Pruebas de servicio de sincronización
+                ├── stocks.go          # Configuración del módulo de servicios
+                ├── sync_parser.go     # Transformación de datos durante sincronización
+                ├── sync_recommendation.go # Algoritmo de puntuación de recomendaciones
+                └── sync.go            # Lógica de sincronización de stocks
+    ├── recommendation_factors.json    # Configuración del algoritmo de recomendación
     ├── .env                   # Configuración de entorno (local)
     ├── .env.example           # Ejemplo de configuración de entorno
-    ├── .gitignore             # Archivo de ignorados de Git
     ├── Dockerfile             # Configuración de contenedor Docker
     ├── go.mod                 # Dependencias del módulo Go
-    ├── go.sum                 # Versiones exactas de dependencias
     └── main.go                # Punto de entrada de la aplicación
 ```
 
@@ -189,7 +184,7 @@ GET /stocks?query=AAPL&page=1&size=10&recommends=true&minTargetTo=150&maxTargetT
         "target_from": 150,
         "target_to": 180,
         "currency": "USD",
-        "time": "2025-02-26T19:30:06.366255-05:00"
+        "recommend_score": 36.125
       }
     ],
     "total": 1000,
@@ -199,6 +194,17 @@ GET /stocks?query=AAPL&page=1&size=10&recommends=true&minTargetTo=150&maxTargetT
   "message": "Consulta de acciones exitosa"
 }
 ```
+
+### Algoritmo de Recomendación
+
+El sistema calcula un `recommend_score` para cada acción basándose en múltiples factores:
+
+1. **Diferencia porcentual entre precios objetivo**: Mayor incremento recibe puntuación más alta
+2. **Calificaciones del analista**: Se priorizan actualizaciones a "Buy" y "Strong-Buy"
+3. **Tipo de acción**: Se asignan diferentes puntuaciones a acciones como "upgraded by", "target raised by", etc.
+4. **Factores de empresa y brokerage**: Configurables desde `recommendation_factors.json`
+
+Este puntaje permite ordenar los resultados cuando se usa el parámetro `recommends=true`.
 
 ### Endpoint POST /stocks/sync
 
@@ -240,3 +246,21 @@ GET /stocks?query=AAPL&page=1&size=10&recommends=true&minTargetTo=150&maxTargetT
 - Cada iteración actualiza aproximadamente 10 registros de acciones
 - La sincronización REEMPLAZA COMPLETAMENTE los datos existentes
 - La operación no se puede deshacer una vez completada
+- Durante la sincronización, se calculan las puntuaciones de recomendación y se almacenan en la base de datos
+
+## Flujo de Datos
+
+### Flujo de Consulta de Stocks
+1. La solicitud HTTP llega al handler `GetStocks`
+2. El handler valida y procesa los parámetros
+3. El servicio de stocks aplica la lógica de negocio
+4. El repositorio realiza la consulta a la base de datos
+5. Los resultados se transforman y devuelven al cliente
+
+### Flujo de Sincronización
+1. La solicitud HTTP llega al handler `SyncStocks`
+2. El servicio de stocks coordina la sincronización
+3. El cliente API obtiene datos de la fuente externa
+4. El parser transforma los datos al formato interno
+5. El algoritmo de recomendación calcula las puntuaciones
+6. El repositorio reemplaza todos los datos en la base de datos
