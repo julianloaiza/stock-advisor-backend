@@ -55,6 +55,27 @@ cp .env.example .env
 swag init
 ```
 
+## Running with Docker
+
+You can run the application using Docker:
+
+```bash
+# Build the image
+docker build -t stock-advisor-backend .
+
+# Run the container
+docker run -p 8080:8080 \
+  -e DATABASE_URL=postgresql://user:password@host/database \
+  -e STOCK_API_URL=https://api.example.com \
+  stock-advisor-backend
+  ...
+```
+
+### Full Deployment
+
+For a complete application deployment, visit:
+[julianloaiza/stock-advisor-deployment](https://github.com/julianloaiza/stock-advisor-deployment)
+
 ## Configuration
 
 Configure the following in `.env`:
