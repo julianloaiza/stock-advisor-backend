@@ -1,9 +1,6 @@
-// internal/httpapi/handlers/health/health.go
 package health
 
 import (
-	"net/http"
-
 	"github.com/julianloaiza/stock-advisor/internal/httpapi/handlers"
 	"github.com/labstack/echo/v4"
 	"go.uber.org/fx"
@@ -28,12 +25,6 @@ func New() Result {
 
 // RegisterRoutes registra las rutas de health.
 func (h *handler) RegisterRoutes(e *echo.Echo) {
-	e.GET("/health", h.HealthCheck)
-}
-
-// HealthCheck maneja el endpoint de verificación de salud.
-func (h *handler) HealthCheck(c echo.Context) error {
-	return c.JSON(http.StatusOK, map[string]string{
-		"status": "ok",
-	})
+	group := e.Group("/health")
+	group.GET("", h.HealthCheck)
 }

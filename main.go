@@ -70,6 +70,12 @@ func setLifeCycle(p Params) {
 				h.RegisterRoutes(p.Echo)
 			}
 
+			// Imprimir todas las rutas registradas para depuración
+			routes := p.Echo.Routes()
+			for _, route := range routes {
+				log.Printf("Ruta registrada: %s %s", route.Method, route.Path)
+			}
+
 			// Iniciar el servidor en una gorutina
 			go func() {
 				log.Printf("🚀 Iniciando servidor en %s", p.Config.Address)
