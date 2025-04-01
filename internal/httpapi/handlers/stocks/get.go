@@ -1,6 +1,7 @@
 package stocks
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
@@ -81,6 +82,8 @@ func parseStockParams(c echo.Context) (StockParams, error) {
 		Currency: "USD", // Valor por defecto
 	}
 
+	log.Printf("Parámetros de consulta: %v", c.QueryParams())
+
 	// Parsing de page
 	if pageStr := c.QueryParam("page"); pageStr != "" {
 		page, err := strconv.Atoi(pageStr)
@@ -93,8 +96,8 @@ func parseStockParams(c echo.Context) (StockParams, error) {
 	// Parsing de size
 	if sizeStr := c.QueryParam("size"); sizeStr != "" {
 		size, err := strconv.Atoi(sizeStr)
-		if err != nil || size < 1 {
-			return params, echo.NewHTTPError(http.StatusBadRequest, "Size debe ser un entero positivo")
+		if err != nil || size < 1 || size > 100 {
+			return params, echo.NewHTTPError(http.StatusBadRequest, "Size debe ser un entero positivo y menor a 100")
 		}
 		params.Size = size
 	}

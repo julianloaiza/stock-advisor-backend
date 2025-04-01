@@ -38,14 +38,8 @@ definitions:
     type: object
 host: localhost:8080
 info:
-  contact:
-    email: soporte@ejemplo.com
-    name: API Support
+  contact: {}
   description: API para gestionar y consultar datos de acciones bursátiles
-  license:
-    name: Apache 2.0
-    url: http://www.apache.org/licenses/LICENSE-2.0.html
-  termsOfService: http://swagger.io/terms/
   title: Stock Advisor API
   version: "1.0"
 paths:
@@ -141,3 +135,6 @@ paths:
       tags:
       - stocks
 swagger: "2.0"
+tags:
+- description: Operaciones con acciones bursátiles
+  name: Stocks
